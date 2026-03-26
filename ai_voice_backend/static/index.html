@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoxShield Cyber Crime Dashboard</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #D4A843;
+            --primary-dark: #B8860B;
+            --danger: #E74C3C;
+            --success: #2ECC71;
+            --bg: #0A0A0B;
+            --card-bg: #111112;
+            --text: #FFFFFF;
+            --text-dim: #A0A0A0;
+            --border: rgba(212, 168, 67, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 50% 10%, rgba(212, 168, 67, 0.05) 0%, transparent 40%);
+        }
+
+        h1, h2, h3 {
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: -0.5px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 60px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo-icon {
+            font-size: 28px;
+            color: var(--primary);
+            text-shadow: 0 0 15px rgba(212, 168, 67, 0.4);
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .status-badge {
+            background: rgba(46, 204, 113, 0.1);
+            color: var(--success);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid rgba(46, 204, 113, 0.2);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        /* Verification Input */
+        .search-box {
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .search-box input {
+            width: 100%;
+            background: #1A1A1C;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px 25px;
+            padding-left: 55px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+            transition: 0.3s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(212, 168, 67, 0.1);
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 22px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary);
+            font-size: 18px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: black;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(212, 168, 67, 0.3);
+        }
+
+        /* Ledger Table */
+        .ledger-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .ledger-table th {
+            text-align: left;
+            padding: 15px 10px;
+            color: var(--text-dim);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .ledger-table td {
+            padding: 20px 10px;
+            border-bottom: 1px solid rgba(212, 168, 67, 0.05);
+            font-size: 14px;
+        }
+
+        .phone-cell {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .hash-id {
+            font-family: 'monospace';
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .badge {
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .badge-danger { background: rgba(231, 76, 60, 0.1); color: var(--danger); border: 1px solid rgba(231, 76, 60, 0.2); }
+        .badge-warning { background: rgba(212, 168, 67, 0.1); color: var(--primary); border: 1px solid rgba(212, 168, 67, 0.2); }
+
+        /* Sidebar Stats */
+        .stat-card {
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 20px;
+            background: rgba(212, 168, 67, 0.03);
+            border: 1px solid var(--border);
+        }
+
+        .stat-label { font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
+        .stat-value { font-size: 24px; font-weight: 800; color: var(--primary); }
+
+        .blockchain-visual {
+            position: absolute;
+            top: 20px; right: 20px;
+            opacity: 0.1;
+            font-size: 100px;
+            pointer-events: none;
+        }
+
+        /* Result Popup */
+        #verify-result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 16px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-gavel logo-icon"></i>
+                <div class="logo-text">VoxShield <span style="color: var(--primary)">Registry</span></div>
+            </div>
+            <div class="status-badge">
+                <i class="fa-solid fa-circle-dot"></i> CLOUD BLOCKCHAIN ACTIVE
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <i class="fa-solid fa-shield-halved blockchain-visual"></i>
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-magnifying-glass-chart" style="color: var(--primary)"></i>
+                        Cyber Crime verification Engine
+                    </div>
+                </div>
+
+                <div class="search-box">
+                    <i class="fa-solid fa-phone"></i>
+                    <input type="text" id="phone-search" placeholder="Enter phone number to verify in global registry...">
+                    <button class="btn" style="position: absolute; right: 8px; top: 8px;" onclick="verifyNumber()">
+                        Verify Security
+                    </button>
+                </div>
+
+                <div id="verify-result"></div>
+
+                <div class="card-header" style="margin-top: 40px; margin-bottom: 30px; border-top: 1px solid var(--border); padding-top: 30px;">
+                    <div class="card-title">
+                        <i class="fa-solid fa-file-shield" style="color: var(--danger)"></i>
+                        Cyber Crime Manual Entry (Admin Only)
+                    </div>
+                </div>
+
+                <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
+                    <div class="search-box" style="margin-bottom: 0;">
+                        <i class="fa-solid fa-phone-slash"></i>
+                        <input type="text" id="manual-phone" placeholder="Phone Number...">
+                    </div>
+                    <div class="search-box" style="margin-bottom: 0;">
+                        <i class="fa-solid fa-key"></i>
+                        <input type="password" id="admin-key" placeholder="API Security Key...">
+                    </div>
+                </div>
+
+                <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
+                    <select id="manual-verdict" style="background: #1A1A1C; border: 1px solid var(--border); border-radius: 12px; padding: 12px; color: white;">
+                        <option value="ai_blocked">AI VOICEOVER BLOCKED</option>
+                        <option value="suspicious">SUSPICIOUS CALLER</option>
+                        <option value="voice_mask">VOICE MASKING DETECTED</option>
+                    </select>
+                    <select id="manual-threat" style="background: #1A1A1C; border: 1px solid var(--border); border-radius: 12px; padding: 12px; color: var(--danger);">
+                        <option value="CRITICAL">CRITICAL THREAT</option>
+                        <option value="HIGH">HIGH THREAT</option>
+                        <option value="MEDIUM">MEDIUM RISK</option>
+                    </select>
+                </div>
+
+                <button class="btn" style="width: 100%; justify-content: center; height: 45px;" onclick="manualReport()">
+                    <i class="fa-solid fa-gavel"></i> Commit to Global Blockchain Registry
+                </button>
+
+                <div class="card-header" style="margin-top: 40px; margin-bottom: 15px;">
+                    <div class="card-title">
+                        <i class="fa-solid fa-list-check" style="color: var(--primary)"></i>
+                        Recent Blockchain entries
+                    </div>
+                </div>
+
+                <table class="ledger-table">
+                    <thead>
+                        <tr>
+                            <th>Phone Number</th>
+                            <th>Block Hash</th>
+                            <th>Verdict</th>
+                            <th>Evidence</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledger-body">
+                        <!-- Content loaded via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="sidebar">
+                <div class="stat-card">
+                    <div class="stat-label">Total Reported Scams</div>
+                    <div class="stat-value" id="total-scams">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Blockchain Height</div>
+                    <div class="stat-value" id="block-height">#1024</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Protected nodes</div>
+                    <div class="stat-value">8,421</div>
+                </div>
+
+                <div class="card" style="padding: 20px; font-size: 13px;">
+                    <h3 style="font-size: 15px; margin-bottom: 12px; color: var(--primary)">Legal Notice</h3>
+                    <p style="color: var(--text-dim); line-height: 1.6;">
+                        All entries in this ledger are cryptographically signed. Cyber crime reports are verified using AI Voice fingerpringing before final consensus approval.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        async function loadRegistry() {
+            try {
+                const response = await fetch(`${API_BASE}/blockchain/registry/`);
+                const data = await response.json();
+                
+                const tableBody = document.getElementById('ledger-body');
+                const totalEl = document.getElementById('total-scams');
+                
+                tableBody.innerHTML = '';
+                totalEl.innerText = data.length;
+                
+                data.reverse().forEach(entry => {
+                    const row = document.createElement('tr');
+                    const time = new Date(entry.timestamp).toLocaleString();
+                    
+                    let audioHtml = '<span style="color: grey; font-style: italic;">No Audio</span>';
+                    if (entry.audio_path) {
+                        const audioUrl = `${API_BASE}/${entry.audio_path}`;
+                        audioHtml = `
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <audio controls style="height: 24px; width: 140px;" src="${audioUrl}">
+                                    Your browser does not support the audio element.
+                                </audio>
+                                <a href="${audioUrl}" target="_blank" style="font-size: 8px; color: var(--primary); text-decoration: none;">Download Evidence</a>
+                            </div>
+                        `;
+                    }
+                    
+                    row.innerHTML = `
+                        <td class="phone-cell">
+                            <i class="fa-solid fa-user-secret" style="color: var(--text-dim); font-size: 12px;"></i>
+                            ${entry.phone_display.replace(/(\d{3})\d+(\d{2})/, "$1****$2")}
+                        </td>
+                        <td><span class="hash-id">${entry.phone_hash.substring(0, 16)}...</span></td>
+                        <td><span class="badge ${entry.verdict === 'ai_blocked' ? 'badge-danger' : 'badge-warning'}">${entry.verdict.replace('_', ' ')}</span></td>
+                        <td>${audioHtml}</td>
+                        <td style="color: var(--text-dim); font-size: 11px;">${time}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (e) {
+                console.error("Failed to load registry", e);
+            }
+        }
+
+        async function verifyNumber() {
+            const input = document.getElementById('phone-search');
+            const number = input.value.trim();
+            const resultDiv = document.getElementById('verify-result');
+            
+            if (!number) return;
+            
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking Blockchain Registry...';
+            resultDiv.style.background = 'rgba(212, 168, 67, 0.05)';
+            resultDiv.style.color = 'var(--primary)';
+
+            try {
+                const response = await fetch(`${API_BASE}/blockchain/verify/?number=${encodeURIComponent(number)}`);
+                const data = await response.json();
+                
+                if (data.is_scam) {
+                    resultDiv.style.background = 'rgba(231, 76, 60, 0.1)';
+                    resultDiv.style.color = 'var(--danger)';
+                    resultDiv.style.border = '1px solid rgba(231, 76, 60, 0.2)';
+                    resultDiv.innerHTML = `
+                        <h3 style="margin-bottom: 5px;"><i class="fa-solid fa-triangle-exclamation"></i> CRITICAL THREAT DETECTED</h3>
+                        <p style="font-size: 13px;">This number matches a known AI Voice Scammer reported by ${data.report_count} users. BLOCK IMMEDIATELY.</p>
+                    `;
+                } else {
+                    resultDiv.style.background = 'rgba(46, 204, 113, 0.1)';
+                    resultDiv.style.color = 'var(--success)';
+                    resultDiv.style.border = '1px solid rgba(46, 204, 113, 0.2)';
+                    resultDiv.innerHTML = `
+                        <h3 style="margin-bottom: 5px;"><i class="fa-solid fa-check-double"></i> VERIFIED SECURE</h3>
+                        <p style="font-size: 13px;">Phone number is not currently flagged in the Cyber Crime Registry. Proceed with normal caution.</p>
+                    `;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = "Error connecting to verification server.";
+            }
+        }
+
+        async function manualReport() {
+            const phone = document.getElementById('manual-phone').value.trim();
+            const key = document.getElementById('admin-key').value.trim();
+            const verdict = document.getElementById('manual-verdict').value;
+            const threat = document.getElementById('manual-threat').value;
+            
+            if (!phone || !key) {
+                alert("Please enter phone number AND API Key");
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('phone_hash', 'manual_block_' + Date.now());
+                formData.append('phone_display', phone);
+                formData.append('verdict', verdict);
+                formData.append('threat_level', threat);
+                formData.append('risk_score', 1.0);
+
+                const response = await fetch(`${API_BASE}/blockchain/report/`, {
+                    method: 'POST',
+                    headers: {
+                        'x-api-key': key
+                    },
+                    body: formData
+                });
+                
+                if (response.status === 200) {
+                    alert("✅ BLOCKCHAIN COMMIT SUCCESS! Number is now globally restricted.");
+                    loadRegistry();
+                } else {
+                    const err = await response.json();
+                    alert("❌ FAILED: " + (err.detail || "Error committing to registry"));
+                }
+            } catch (e) {
+                alert("Server error connecting to Blockchain node.");
+            }
+        }
+
+        // Initial load
+        loadRegistry();
+        // Polling loop
+        setInterval(loadRegistry, 30000);
+    </script>
+</body>
+</html>
