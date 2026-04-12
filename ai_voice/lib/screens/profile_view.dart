@@ -39,6 +39,7 @@ class _ProfileViewState extends State<ProfileView> {
   bool _isTestingConnection = false;
   String _connectionStatus = '';
   String _connectionMessage = '';
+  String _savedUrl = '';
 
   // Real-time permission statuses
   bool _micGranted = false;
@@ -486,18 +487,46 @@ class _ProfileViewState extends State<ProfileView> {
     final prefs = await SharedPreferences.getInstance();
     final url = prefs.getString('backend_url') ?? '';
     if (mounted) {
-      setState(() => _backendUrlController.text = url);
+      setState(() {
+        _backendUrlController.text = url;
+        _savedUrl = url;
+      });
     }
   }
 
   Future<void> _saveBackendUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('backend_url', _backendUrlController.text.trim());
+    final newUrl = _backendUrlController.text.trim();
+    await prefs.setString('backend_url', newUrl);
     if (mounted) {
+      setState(() {
+        _savedUrl = newUrl;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Backend URL saved!', style: TextStyle(color: Colors.white)),
           backgroundColor: const Color(0xFF2ECC71),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  Future<void> _disconnectBackend() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('backend_url');
+    setState(() {
+      _backendUrlController.clear();
+      _savedUrl = '';
+      _connectionStatus = '';
+      _connectionMessage = '';
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Backend disconnected and URL removed!', style: TextStyle(color: Colors.white)),
+          backgroundColor: const Color(0xFFE74C3C),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -636,6 +665,7 @@ class _ProfileViewState extends State<ProfileView> {
           const SizedBox(height: 16),
           TextField(
             controller: _backendUrlController,
+            onChanged: (val) => setState(() {}),
             style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
             decoration: InputDecoration(
               hintText: 'https://your-tunnel-url.ngrok.io',
@@ -676,17 +706,30 @@ class _ProfileViewState extends State<ProfileView> {
                 ),
               ),
               const SizedBox(width: 10),
-              GestureDetector(
-                onTap: _saveBackendUrl,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD4A843).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+              if (_savedUrl.isNotEmpty && _backendUrlController.text.trim() == _savedUrl)
+                GestureDetector(
+                  onTap: _disconnectBackend,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE74C3C).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.link_off, color: Color(0xFFE74C3C), size: 22),
                   ),
-                  child: const Icon(Icons.save, color: Color(0xFFB8860B), size: 22),
+                )
+              else
+                GestureDetector(
+                  onTap: _saveBackendUrl,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD4A843).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.save, color: Color(0xFFB8860B), size: 22),
+                  ),
                 ),
-              ),
             ],
           ),
           if (_connectionStatus.isNotEmpty) ...[

@@ -3,12 +3,14 @@ import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../models/call_record.dart';
 import '../models/user_profile.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   static Database? _database;
+  static const String _customContactsKey = 'custom_contact_profiles';
   
   // Web Fallback Storage
   static final List<CallRecord> _webMockRecords = [];
@@ -191,6 +193,46 @@ class DatabaseService {
       where: 'id = ?',
       whereArgs: [recordId],
     );
+  }
+
+  String normalizePhoneNumber(String value) {
+    return value.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+  }
+
+  Future<Map<String, Map<String, String>>> getCustomContactProfiles() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_customContactsKey);
+    if (raw == null || raw.isEmpty) return {};
+
+    final decoded = json.decode(raw) as Map<String, dynamic>;
+    return decoded.map(
+      (key, value) => MapEntry(
+        key,
+        Map<String, String>.from(value as Map),
+      ),
+    );
+  }
+
+  Future<Map<String, String>?> getCustomContactProfile(String phoneNumber) async {
+    final profiles = await getCustomContactProfiles();
+    return profiles[normalizePhoneNumber(phoneNumber)];
+  }
+
+  Future<void> saveCustomContactProfile(
+    String phoneNumber, {
+    required String displayName,
+    String? imagePath,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final profiles = await getCustomContactProfiles();
+    final key = normalizePhoneNumber(phoneNumber);
+
+    profiles[key] = {
+      'displayName': displayName.trim(),
+      'imagePath': imagePath?.trim() ?? '',
+    };
+
+    await prefs.setString(_customContactsKey, json.encode(profiles));
   }
 
   Future<Map<String, dynamic>> getAnalyticsStats() async {

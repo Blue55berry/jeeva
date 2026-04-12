@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'dart:io';
 import '../services/database_service.dart';
 import '../models/call_record.dart';
+import 'individual_contact_profile.dart';
 
 class HistoryView extends StatefulWidget {
   const HistoryView({super.key});
@@ -16,6 +18,7 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
   List<Contact> _contacts = [];
   List<Contact> _filteredContacts = [];
   List<CallRecord> _filteredRecords = [];
+  Map<String, Map<String, String>> _customProfiles = {};
   
   bool _isLoading = true;
   late TabController _tabController;
@@ -55,15 +58,16 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
     try {
       if (mounted) setState(() => _isLoading = true);
       
-      final records = await _db.getCallRecords();
+      _customProfiles = await _db.getCustomContactProfiles();
+      final records = _deduplicateCallRecords(await _db.getCallRecords());
       bool anyUpdated = false;
       
-      // Fetch device contacts for the second section
       if (await FlutterContacts.requestPermission(readonly: true)) {
         final List<Contact> deviceContacts = await FlutterContacts.getContacts(withProperties: true);
-        _contacts = deviceContacts.where((c) => c.phones.isNotEmpty).toList();
+        _contacts = _deduplicateContacts(
+          deviceContacts.where((c) => c.phones.isNotEmpty).toList(),
+        );
         
-        // Auto-resolve names for records
         for (var record in records) {
           if (record.contactName == null || record.contactName!.isEmpty) {
             String normTarget = record.phoneNumber.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
@@ -82,33 +86,13 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
         }
       }
 
-      final finalRecords = anyUpdated ? await _db.getCallRecords() : records;
+      final finalRecords = anyUpdated
+          ? _deduplicateCallRecords(await _db.getCallRecords())
+          : records;
 
       if (mounted) {
         setState(() {
-          // Aggressive Deduplication: One entry per person/number
-          final Map<String, CallRecord> uniqueMap = {};
-          final Set<String> processedBaseNumbers = {};
-          
-          for (var r in finalRecords) {
-            // ONLY show actual telephony logs (Filter out manual uploads/songs)
-            if (r.callType == 'uploaded') continue; 
-            
-            // Normalize phone for comparison (numbers only)
-            String digits = r.phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
-            // Key by normalized digits to collapse international/local formatting differences
-            if (digits.length >= 10) {
-              String suffix = digits.substring(digits.length - 10);
-              if (!processedBaseNumbers.contains(suffix)) {
-                processedBaseNumbers.add(suffix);
-                uniqueMap[suffix] = r;
-              }
-            } else if (!uniqueMap.containsKey(digits)) {
-              uniqueMap[digits] = r;
-            }
-          }
-          
-          _records = uniqueMap.values.toList();
+          _records = finalRecords.where((r) => r.callType != 'uploaded').toList();
           _filteredRecords = _records;
           _filteredContacts = _contacts;
           _isLoading = false;
@@ -125,14 +109,127 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
   String _formatTimestamp(String timestamp) {
     try {
       DateTime dt = DateTime.parse(timestamp);
-      Duration diff = DateTime.now().difference(dt);
-      if (diff.inMinutes < 1) return 'Just now';
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      return '${diff.inDays}d ago';
+      return "${dt.hour}:${dt.minute.toString().padLeft(2, '0')} ${dt.hour >= 12 ? 'PM' : 'AM'}";
     } catch (e) {
       return 'Unknown';
     }
+  }
+
+  String _formatDateHeader(String timestamp) {
+    try {
+      DateTime dt = DateTime.parse(timestamp);
+      DateTime now = DateTime.now();
+      if (dt.day == now.day && dt.month == now.month && dt.year == now.year) return 'TODAY';
+      if (dt.day == now.day - 1 && dt.month == now.month && dt.year == now.year) return 'YESTERDAY';
+      List<String> months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      return "${dt.day} ${months[dt.month - 1]} ${dt.year}".toUpperCase();
+    } catch (e) {
+      return 'OLDER';
+    }
+  }
+
+  List<Contact> _deduplicateContacts(List<Contact> contacts) {
+    final Map<String, Contact> uniqueContacts = {};
+    for (final contact in contacts) {
+      final primaryNumber = contact.phones.isNotEmpty
+          ? contact.phones.first.number.replaceAll(RegExp(r'[\s\-\(\)\+]'), '')
+          : '';
+      final key = '${contact.displayName.toLowerCase()}|$primaryNumber';
+      uniqueContacts.putIfAbsent(key, () => contact);
+    }
+    return uniqueContacts.values.toList();
+  }
+
+  List<CallRecord> _deduplicateCallRecords(List<CallRecord> records) {
+    final List<CallRecord> uniqueRecords = [];
+    for (final record in records) {
+      final duplicateIndex = uniqueRecords.indexWhere(
+        (existing) => _isSameCall(existing, record),
+      );
+
+      if (duplicateIndex == -1) {
+        uniqueRecords.add(record);
+      } else {
+        uniqueRecords[duplicateIndex] = _preferRecord(
+          uniqueRecords[duplicateIndex],
+          record,
+        );
+      }
+    }
+    return uniqueRecords;
+  }
+
+  bool _isSameCall(CallRecord a, CallRecord b) {
+    final normalizedA = a.phoneNumber.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+    final normalizedB = b.phoneNumber.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+    if (a.callType != b.callType) {
+      return false;
+    }
+
+    final DateTime timeA = DateTime.tryParse(a.timestamp) ?? DateTime(1970);
+    final DateTime timeB = DateTime.tryParse(b.timestamp) ?? DateTime(1970);
+    final bool nearInTime = timeA.difference(timeB).inMinutes.abs() <= 2;
+    if (normalizedA.isEmpty || normalizedB.isEmpty) {
+      return nearInTime && a.result == b.result;
+    }
+    return normalizedA == normalizedB && timeA.difference(timeB).inMinutes.abs() <= 10;
+  }
+
+  CallRecord _preferRecord(CallRecord current, CallRecord candidate) {
+    if (_hasDisplayName(candidate) && !_hasDisplayName(current)) return candidate;
+    if (_hasKnownNumber(candidate) && !_hasKnownNumber(current)) return candidate;
+    if (candidate.duration > current.duration) return candidate;
+    if (candidate.isRealAnalysis && !current.isRealAnalysis) return candidate;
+    if ((candidate.analysisSummary?.isNotEmpty ?? false) &&
+        !(current.analysisSummary?.isNotEmpty ?? false)) {
+      return candidate;
+    }
+    return current;
+  }
+
+  bool _hasDisplayName(CallRecord record) {
+    final name = record.contactName?.trim() ?? '';
+    return name.isNotEmpty && name.toLowerCase() != 'unknown';
+  }
+
+  bool _hasKnownNumber(CallRecord record) {
+    final number = record.phoneNumber.trim();
+    return number.isNotEmpty && number.toLowerCase() != 'unknown';
+  }
+
+  String _profileNameForNumber(String phoneNumber, {String? fallbackName}) {
+    final profile = _customProfiles[_db.normalizePhoneNumber(phoneNumber)];
+    final customName = profile?['displayName']?.trim();
+    if (customName != null && customName.isNotEmpty) return customName;
+    if (fallbackName != null && fallbackName.trim().isNotEmpty) return fallbackName.trim();
+    return phoneNumber;
+  }
+
+  String? _profileImageForNumber(String phoneNumber) {
+    final profile = _customProfiles[_db.normalizePhoneNumber(phoneNumber)];
+    final path = profile?['imagePath']?.trim();
+    if (path == null || path.isEmpty) return null;
+    return path;
+  }
+
+  Widget _buildAvatar(String label, {String? imagePath}) {
+    if (imagePath != null && imagePath.isNotEmpty && File(imagePath).existsSync()) {
+      return CircleAvatar(
+        backgroundImage: FileImage(File(imagePath)),
+      );
+    }
+
+    final initial = label.isNotEmpty ? label[0].toUpperCase() : '?';
+    return CircleAvatar(
+      backgroundColor: const Color(0xFFD4A843).withValues(alpha: 0.1),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Color(0xFFB8860B),
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 
   @override
@@ -155,7 +252,6 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
           ),
           const SizedBox(height: 10),
           
-          // Search Bar
           Container(
             height: 48,
             margin: const EdgeInsets.only(bottom: 16),
@@ -185,7 +281,6 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
             ),
           ),
           
-          // Custom Styled TabBar
           Container(
             height: 50,
             margin: const EdgeInsets.symmetric(vertical: 8),
@@ -242,24 +337,49 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
 
   Widget _buildMonitoringSection() {
     if (_filteredRecords.isEmpty) {
-       return _buildEmptyState("No matching logs", "No identified security warnings found.", Icons.shield_outlined);
+      return _buildEmptyState("No matching logs", "No identified security warnings found.", Icons.shield_outlined);
     }
+
+    Map<String, List<CallRecord>> grouped = {};
+    for (var r in _filteredRecords) {
+      String dateKey = _formatDateHeader(r.timestamp);
+      grouped.putIfAbsent(dateKey, () => []).add(r);
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 100),
-      itemCount: _filteredRecords.length,
+      itemCount: grouped.keys.length,
       itemBuilder: (context, index) {
-        final record = _filteredRecords[index];
-        bool isFake = record.result == 'ai_blocked';
-        return Dismissible(
-          key: Key(record.id.toString()),
-          direction: DismissDirection.endToStart,
-          onDismissed: (_) async {
-            if (record.id != null) {
-              await _db.deleteCallRecord(record.id!);
-              refreshHistory();
-            }
-          },
-          child: _buildLogTile(record, isFake),
+        String date = grouped.keys.elementAt(index);
+        List<CallRecord> calls = grouped[date]!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 8, top: 16, bottom: 12),
+              child: Text(date,
+                  style: const TextStyle(
+                      color: Color(0xFFB8860B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5)),
+            ),
+            ...calls.map((record) {
+              bool isFake = record.result == 'ai_blocked';
+              return Dismissible(
+                key: Key(record.id.toString()),
+                direction: DismissDirection.endToStart,
+                onDismissed: (_) async {
+                  if (record.id != null) {
+                    await _db.deleteCallRecord(record.id!);
+                    refreshHistory();
+                  }
+                },
+                child: _buildLogTile(record, isFake),
+              );
+            }),
+          ],
         );
       },
     );
@@ -275,44 +395,66 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
       itemBuilder: (context, index) {
         final contact = _filteredContacts[index];
         String number = contact.phones.isNotEmpty ? contact.phones.first.number : 'No number';
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE0D5C0).withValues(alpha: 0.6)),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: const Color(0xFFD4A843).withValues(alpha: 0.1),
-                child: Text(contact.displayName[0], style: const TextStyle(color: Color(0xFFB8860B), fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(contact.displayName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Color(0xFF1A1A1A))),
-                    Text(number, style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
-                  ],
+        return GestureDetector(
+          onTap: () async {
+            final changed = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (context) => IndividualContactProfile(
+                  phoneNumber: number,
+                  displayName: _profileNameForNumber(
+                    number,
+                    fallbackName: contact.displayName,
+                  ),
+                  imagePath: _profileImageForNumber(number),
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2ECC71).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text("TRUSTED", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2ECC71))),
+            );
+            if (changed == true) {
+              await refreshHistory();
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE0D5C0).withValues(alpha: 0.6)),
+            ),
+            child: Row(
+              children: [
+                _buildAvatar(
+                  _profileNameForNumber(number, fallbackName: contact.displayName),
+                  imagePath: _profileImageForNumber(number),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _profileNameForNumber(number, fallbackName: contact.displayName),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: Color(0xFF1A1A1A)),
+                      ),
+                      Text(number, style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2ECC71).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text("TRUSTED", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2ECC71))),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -320,57 +462,104 @@ class HistoryViewState extends State<HistoryView> with SingleTickerProviderState
   }
 
   Widget _buildLogTile(CallRecord record, bool isFake) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE0D5C0)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: isFake ? const Color(0xFFE74C3C).withValues(alpha: 0.1) : const Color(0xFF2ECC71).withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: () async {
+        final changed = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (context) => IndividualContactProfile(
+              phoneNumber: record.phoneNumber,
+              displayName: _profileNameForNumber(
+                record.phoneNumber,
+                fallbackName: record.contactName,
+              ),
+              imagePath: _profileImageForNumber(record.phoneNumber),
             ),
-            child: Icon(isFake ? Icons.warning_amber_rounded : Icons.check_circle_outline, color: isFake ? const Color(0xFFE74C3C) : const Color(0xFF2ECC71)),
           ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        );
+        if (changed == true) {
+          await refreshHistory();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE0D5C0)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isFake
+                    ? const Color(0xFFE74C3C).withValues(alpha: 0.1)
+                    : const Color(0xFF2ECC71).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                  isFake ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                  color:
+                      isFake ? const Color(0xFFE74C3C) : const Color(0xFF2ECC71)),
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      _profileNameForNumber(
+                        record.phoneNumber,
+                        fallbackName: record.contactName,
+                      ),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Color(0xFF1A1A1A))),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(isFake ? "AI Blocked" : "Verified",
+                          style: TextStyle(
+                              color: isFake
+                                  ? const Color(0xFFE74C3C)
+                                  : const Color(0xFF2ECC71),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 8),
+                      Text("Risk: ${(record.riskScore * 100).toInt()}%",
+                          style: const TextStyle(
+                              color: Color(0xFF888888), fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  record.contactName != null && record.contactName!.isNotEmpty ? record.contactName! : record.phoneNumber, 
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1A1A1A))
-                ),
+                Text(_formatTimestamp(record.timestamp),
+                    style:
+                        const TextStyle(color: Color(0xFFAAAAAA), fontSize: 11)),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(isFake ? "AI Blocked" : "Verified", style: TextStyle(color: isFake ? const Color(0xFFE74C3C) : const Color(0xFF2ECC71), fontSize: 12, fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 8),
-                    Text("Risk: ${(record.riskScore * 100).toInt()}%", style: const TextStyle(color: Color(0xFF888888), fontSize: 12)),
-                  ],
+                Icon(
+                  record.callType == 'incoming'
+                      ? Icons.call_received
+                      : record.callType == 'outgoing'
+                          ? Icons.call_made
+                          : Icons.call_missed,
+                  size: 16,
+                  color: const Color(0xFFB8860B),
                 ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(_formatTimestamp(record.timestamp), style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 11)),
-              const SizedBox(height: 4),
-              Icon(
-                record.callType == 'incoming' ? Icons.call_received : record.callType == 'outgoing' ? Icons.call_made : Icons.call_missed,
-                size: 16, color: const Color(0xFFB8860B),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

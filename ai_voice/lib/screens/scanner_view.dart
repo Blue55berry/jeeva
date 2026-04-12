@@ -63,7 +63,7 @@ class _ScannerViewState extends State<ScannerView> {
     double bottomPadding = MediaQuery.of(context).padding.bottom;
     return SingleChildScrollView(
       key: const ValueKey('scanner'),
-      padding: EdgeInsets.only(bottom: 80 + bottomPadding),
+      padding: EdgeInsets.only(bottom: 140 + bottomPadding),
       child: Column(
         children: [
           _buildStatusCard(),

@@ -11,7 +11,6 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';
 
 import '../models/call_record.dart';
 import '../services/database_service.dart';
@@ -20,21 +19,12 @@ import '../services/threat_registry_service.dart';
 import '../services/notification_service.dart';
 
 class CallService {
+  static const int _compactOverlaySize = 130;
+  Timer? _watchdogTimer;
+
   static final CallService _instance = CallService._internal();
   factory CallService() => _instance;
-  CallService._internal() {
-    // Listen for commands from the Overlay
-    const MethodChannel('voxshield/overlay_messenger').setMethodCallHandler((call) async {
-       if (call.method == 'toggle_record') {
-         await toggleManualRecording();
-       } else if (call.method == 'report_scam') {
-         debugPrint('[CallService] ⚖️ Reporting number to Cyber Crime Registry: $_currentNumber');
-         await _db.reportScam(_currentNumber, currentRiskScore.value, evidencePath: _recordingPath);
-         // Force update overlay to show blocked state
-         await _sendDataToOverlay(_currentNumber, 1.0, 'blocked');
-       }
-    });
-  }
+  CallService._internal();
 
   final DatabaseService _db = DatabaseService();
   final BlockchainService _blockchain = BlockchainService();
@@ -42,6 +32,7 @@ class CallService {
   final NotificationService _notifications = NotificationService();
   
   StreamSubscription? _phoneStateSubscription;
+  StreamSubscription? _overlayMessageSubscription;
   VoidCallback? onCallEnded;
   
   // Audio Recording for real-time analysis
@@ -49,6 +40,12 @@ class CallService {
   String? _recordingPath;
   bool _isRecording = false;
   bool _isRealAnalysis = false;
+  String? _latestAnalysisSummary;
+
+  // ── Session Tracking (new real-time backend) ──────────────────────────
+  String? _currentSessionId;           // server-side session ID
+  int _voiceSwitchCount = 0;           // mid-call voice switches detected
+  double _emaRisk = 0.0;               // exponential moving average risk from server
   
   // Call State Tracking
   bool _isInCall = false;
@@ -90,6 +87,35 @@ class CallService {
 
   void startListening() async {
     _phoneStateSubscription?.cancel();
+    _overlayMessageSubscription ??= FlutterOverlayWindow.overlayListener.listen(
+      (data) async {
+        if (data is! Map) return;
+        final dynamic action = data['action'];
+        if (action == 'toggle_record') {
+          await toggleManualRecording();
+        } else if (action == 'report_scam') {
+          String? evidence;
+          if (_isManualRecording ||
+              (_recordingPath != null && File(_recordingPath!).existsSync())) {
+            evidence = _recordingPath;
+          }
+
+          currentRiskScore.value = 1.0;
+          _latestAnalysisSummary ??= 'Reported as scam during live call.';
+          await _db.reportScam(
+            _currentNumber,
+            currentRiskScore.value,
+            evidencePath: evidence,
+          );
+          await _uploadReportToBackend(
+            _currentNumber,
+            currentRiskScore.value,
+            evidence,
+          );
+          await _sendDataToOverlay(_currentNumber, 1.0, 'blocked');
+        }
+      },
+    );
     await _notifications.init(onAction: (action) {
       if (action == 'show_overlay') {
         showManualOverlay();
@@ -117,10 +143,15 @@ class CallService {
             _handleCallEnded();
             break;
           case PhoneStateStatus.NOTHING:
-            // Small delay to prevent flickering
-            Future.delayed(const Duration(seconds: 1), () {
-               if (!_isInCall && _overlayActive) _closeOverlay();
-            });
+            if (_isInCall) {
+              _handleCallEnded();
+            } else {
+              Future.delayed(const Duration(milliseconds: 800), () {
+                if (_overlayActive) {
+                  _closeOverlay();
+                }
+              });
+            }
             break;
         }
       },
@@ -150,7 +181,6 @@ class CallService {
     // 🛡️ BLOCKCHAIN CHECK: Known Scam Detection
     final securityInfo = await _db.checkNumberSecurity(_currentNumber);
     if (securityInfo != null && securityInfo['is_blocked'] == 1) {
-       debugPrint('[CallService] 🛑 BLOCKCHAIN: Known scammer detected! $_currentNumber');
        currentRiskScore.value = 1.0;
        await _activateOverlay(_currentNumber, 1.0, 'blocked');
        return;
@@ -161,7 +191,7 @@ class CallService {
     
     // REDUNDANCY LAYER 2: Delayed Launch (helps on MIUI/POCO)
     await Future.delayed(const Duration(milliseconds: 700));
-    bool stillMissing = !await FlutterOverlayWindow.isActive();
+    bool stillMissing = !await _isOverlayActive();
     if (stillMissing && _isInCall) {
        await _activateOverlay(number, currentRiskScore.value, 'incoming');
     }
@@ -172,6 +202,9 @@ class CallService {
     
     // Resolve contact name if possible
     _currentContactName = await _resolveContactName(number);
+    
+    // Start backend session tracking
+    await _startCallSession(number);
     
     // Notification disabled at user request
     // _notifications.showInterceptorStarted(number: _currentContactName ?? number);
@@ -200,7 +233,6 @@ class CallService {
     // 🛡️ BLOCKCHAIN CHECK: Known Scam Detection
     final securityInfo = await _db.checkNumberSecurity(_currentNumber);
     if (securityInfo != null && securityInfo['is_blocked'] == 1) {
-       debugPrint('[CallService] 🛑 BLOCKCHAIN: Known scammer detected! $_currentNumber');
        currentRiskScore.value = 1.0;
        await _activateOverlay(_currentNumber, 1.0, 'blocked');
        return;
@@ -212,13 +244,16 @@ class CallService {
     // 🛡️ NEW: OVERLAY WATCHDOG
     // On some devices (MIUI/POCO), the overlay might fail to launch or be killed by the system.
     // This watchdog ensures it stays visible throughout the call.
-    Timer.periodic(const Duration(seconds: 5), (timer) async {
+    // Cancel previous watchdog if any
+    _watchdogTimer?.cancel();
+    _watchdogTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
        if (!_isInCall) {
          timer.cancel();
+         _watchdogTimer = null;
          return;
        }
        
-       bool isActive = await FlutterOverlayWindow.isActive();
+       bool isActive = await _isOverlayActive();
        if (!isActive && _isInCall) {
          debugPrint('[CallService] 🔄 Watchdog: Overlay missing during active call. Re-activating...');
          await _activateOverlay(_currentNumber, currentRiskScore.value, _callDirection);
@@ -282,24 +317,84 @@ class CallService {
     _syncOverlayState();
   }
 
+  /// Returns the cleaned-up backend URL with proper http/https prefix.
+  String _buildBackendUrl(String raw) {
+    String url = raw.trim().replaceAll(RegExp(r'/+$'), '');
+    if (!url.startsWith('http')) {
+      if (RegExp(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}').hasMatch(url) ||
+          url.contains('localhost')) {
+        url = 'http://$url';
+      } else {
+        url = 'https://$url';
+      }
+    }
+    return url;
+  }
+
+  /// Start a server-side call session when the call begins.
+  Future<void> _startCallSession(String phoneNumber) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final backendUrl = _buildBackendUrl(
+          prefs.getString('backend_url') ?? 'http://127.0.0.1:8000');
+
+      final response = await http.post(
+        Uri.parse('$backendUrl/session/start'),
+        headers: {
+          'x-api-key': 'voxshield_live_secure_v1',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({'phone_number': phoneNumber}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _currentSessionId = data['session_id'] as String?;
+        debugPrint('[CallService] ✅ Session started: $_currentSessionId');
+      }
+    } catch (e) {
+      debugPrint('[CallService] ⚠️ Could not start session (offline?): $e');
+      _currentSessionId = null;
+    }
+  }
+
+  /// End the server-side session when the call ends.
+  Future<Map<String, dynamic>?> _endCallSession() async {
+    if (_currentSessionId == null) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final backendUrl = _buildBackendUrl(
+          prefs.getString('backend_url') ?? 'http://127.0.0.1:8000');
+
+      final response = await http.post(
+        Uri.parse('$backendUrl/session/$_currentSessionId/end'),
+        headers: {'x-api-key': 'voxshield_live_secure_v1'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        debugPrint('[CallService] 🔚 Session ended: $_currentSessionId | verdict=${data['final_verdict']}');
+        return data;
+      }
+    } catch (e) {
+      debugPrint('[CallService] ⚠️ Could not end session: $e');
+    }
+    return null;
+  }
+
   Future<void> _analyzeAudioFile(String filePath) async {
     debugPrint('[CallService] Analyzing recording: $filePath');
     try {
       final prefs = await SharedPreferences.getInstance();
-      String backendUrl = prefs.getString('backend_url') ?? 'http://127.0.0.1:8000';
-      backendUrl = backendUrl.trim().replaceAll(RegExp(r'/+$'), ''); // Remove trailing slashes
-      
-      if (!backendUrl.startsWith('http')) {
-        // Use http for IPs, localhost, or simple hostnames. https for everything else.
-        if (RegExp(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}').hasMatch(backendUrl) || backendUrl.contains('localhost')) {
-          backendUrl = 'http://$backendUrl';
-        } else {
-          backendUrl = 'https://$backendUrl';
-        }
-      }
-      
-      var uri = Uri.parse('$backendUrl/analyze/');
-      var request = http.MultipartRequest('POST', uri);
+      final backendUrl = _buildBackendUrl(
+          prefs.getString('backend_url') ?? 'http://127.0.0.1:8000');
+
+      // ── Use session-based endpoint if we have a session, otherwise fall back ──
+      final endpoint = _currentSessionId != null
+          ? '$backendUrl/session/$_currentSessionId/analyze'
+          : '$backendUrl/analyze/';
+
+      var request = http.MultipartRequest('POST', Uri.parse(endpoint));
       request.headers['x-api-key'] = 'voxshield_live_secure_v1';
       request.files.add(await http.MultipartFile.fromPath('file', filePath));
 
@@ -307,66 +402,88 @@ class CallService {
       if (response.statusCode == 200) {
         final respStr = await response.stream.bytesToString();
         final data = json.decode(respStr);
-        
+
         if (data['success'] == true) {
-          double risk = data['risk_score'] ?? 0.0;
+          // Prefer EMA risk (session-aware rolling average) over raw segment risk
+          double risk = (data['ema_risk'] as num?)?.toDouble()
+              ?? (data['risk_score'] as num?)?.toDouble()
+              ?? 0.0;
           String summary = data['summary'] ?? 'No detail provided.';
+          bool voiceSwitched = data['voice_switched'] ?? false;
+          _voiceSwitchCount = data['voice_switch_count'] ?? _voiceSwitchCount;
+          _emaRisk = risk;
+
           currentRiskScore.value = risk;
           _isRealAnalysis = true;
-          
-          // Update overlay with real AI result
-          await _sendDataToOverlay(_currentNumber, risk, 'analyzed');
-          
-          await _db.insertCallRecord(CallRecord(
-            phoneNumber: _currentNumber,
-            contactName: _currentContactName,
-            callType: _callDirection,
-            result: risk > 0.5 ? 'ai_blocked' : 'human_verified',
-            riskScore: risk,
-            timestamp: DateTime.now().toIso8601String(),
-            recordingPath: filePath,
-            isRealAnalysis: true,
-            analysisSummary: summary,
-          ));
-          
-          // Threat Registry logic
-          if (risk > 0.6) {
+
+          // Build overlay status string
+          String status = 'analyzed';
+          if (voiceSwitched) status = 'voice_switched';
+
+          final identityMatch = data['identity_match'] == true;
+
+          // Update overlay with enriched real-time result
+          await _sendDataToOverlayEnriched(
+            _currentNumber, risk, status,
+            voiceSwitched: voiceSwitched,
+            voiceSwitchCount: _voiceSwitchCount,
+            pitchAnalysis: data['pitch_analysis'] ?? '',
+            frequencyVariance: data['frequency_variance'] ?? '',
+            identityMatch: identityMatch,
+          );
+
+          _latestAnalysisSummary = summary;
+
+          // Voice-switch is a critical scam indicator
+          if (voiceSwitched || risk > 0.6) {
             final db = await _db.getRawDatabase();
             if (db != null) {
               await _threatRegistry.reportThreat(
                 db: db,
                 phoneNumber: _currentNumber,
                 riskScore: risk,
-                threatType: 'deepfake',
-                notes: 'Detected live on call',
+                threatType: voiceSwitched ? 'voice_clone' : 'deepfake',
+                notes: voiceSwitched
+                    ? 'Mid-call voice switch detected (scammer handoff)'
+                    : 'Detected live on call',
+              );
+
+              // 🛡️ INSTANT CLOUD SYNC: Update Cyber Crime Site during the call
+              await _db.reportScam(
+                _currentNumber,
+                risk,
+                evidencePath: filePath,
               );
             }
-            // Send Alert Notification
+            String alertTitle = voiceSwitched
+                ? '🔄 VOICE SWITCH DETECTED'
+                : '🚨 DEEPFAKE DETECTED';
+            String alertBody = voiceSwitched
+                ? 'Mid-call speaker change detected — possible AI handoff scam! ($_voiceSwitchCount switch${_voiceSwitchCount > 1 ? 'es' : ''})'
+                : 'Active call exhibits AI generation probability (${(risk * 100).toInt()}%).';
             await _notifications.showThreatAlert(
-              title: '🚨 DEEPFAKE DETECTED',
-              body: 'Active call exhibits high AI generation probability (${(risk*100).toInt()}%).',
-              threatLevel: risk > 0.8 ? 'CRITICAL' : 'HIGH',
+              title: alertTitle,
+              body: alertBody,
+              threatLevel: (risk > 0.8 || voiceSwitched) ? 'CRITICAL' : 'HIGH',
             );
           }
-          
-          // --- 🛡️ NEW: SILENT AUTO-RECORDING ---
+
+          // Silent auto-recording on critical risk
           if (risk > 0.8 && !_isManualRecording) {
-             debugPrint('[CallService] 🛡️ THREAT CRITICAL: Triggering Silent Evidence Recording...');
-             // Automatically start a full-call manual recording session
-             await toggleManualRecording(); 
+            debugPrint('[CallService] 🛡️ CRITICAL THREAT: Starting silent evidence recording...');
+            await toggleManualRecording();
           }
-          
-          debugPrint('[CallService] AI Backend Score: $risk');
+
+          debugPrint('[CallService] EMA Risk: $risk | Voice Switches: $_voiceSwitchCount');
         }
       } else {
-        throw Exception("Backend failed with status: ${response.statusCode}");
+        throw Exception('Backend returned status: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('[CallService] Analysis failed, simulating offline risk: $e');
-      // If server is offline, simulate result or use Threat Registry backup
+      debugPrint('[CallService] Analysis failed (offline fallback): $e');
       _isRealAnalysis = false;
       if (currentRiskScore.value == 0.0) {
-        currentRiskScore.value = (Random().nextDouble() * 0.4); // Bias to safe if unknown
+        currentRiskScore.value = (Random().nextDouble() * 0.3);
         await _sendDataToOverlay(_currentNumber, currentRiskScore.value, 'analyzed');
       }
     }
@@ -382,37 +499,84 @@ class CallService {
   Future<void> toggleManualRecording() async {
     if (_isManualRecording) {
       debugPrint('[CallService] ⏹️ Stopping manual recording...');
-      await _audioRecorder.stop();
+      final path = await _audioRecorder.stop();
+      debugPrint('[CallService] 📁 Recording saved to: $path');
       _isManualRecording = false;
     } else {
       if (await _audioRecorder.hasPermission()) {
         debugPrint('[CallService] 🎙️ Starting full call manual recording...');
         final Directory appDir = await getApplicationDocumentsDirectory();
-        _recordingPath = '${appDir.path}/call_recording_${_currentNumber}_${DateTime.now().millisecondsSinceEpoch}.wav';
+        final folder = Directory('${appDir.path}/recordings');
+        if (!folder.existsSync()) folder.createSync();
+        
+        _recordingPath = '${folder.path}/call_${_currentNumber}_${DateTime.now().millisecondsSinceEpoch}.wav';
         await _audioRecorder.start(
-          const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 44100, numChannels: 1),
+          const RecordConfig(
+            encoder: AudioEncoder.wav, 
+            sampleRate: 16000, // Better for AI analysis
+            numChannels: 1,
+            bitRate: 128000
+          ),
           path: _recordingPath!,
         );
         _isManualRecording = true;
+        debugPrint('[CallService] ⏺️ Recording active at: $_recordingPath');
       }
     }
     _syncOverlayState();
+  }
+
+  /// Upload the report and audio evidence to the remote backend
+  Future<void> _uploadReportToBackend(String number, double risk, String? audioPath) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final baseUrl = prefs.getString('backend_url');
+      if (baseUrl == null) return;
+
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/blockchain/report/'));
+      request.headers['x-api-key'] = 'voxshield_live_secure_v1';
+      
+      request.fields['phone_hash'] = _blockchain.hashPhoneNumber(number);
+      request.fields['phone_display'] = number;
+      request.fields['verdict'] = risk > 0.6 ? 'ai_scam' : 'suspicious';
+      request.fields['threat_level'] = risk > 0.8 ? 'CRITICAL' : 'HIGH';
+      request.fields['risk_score'] = risk.toString();
+
+      if (audioPath != null && File(audioPath).existsSync()) {
+        request.files.add(await http.MultipartFile.fromPath('file', audioPath));
+        debugPrint('[CallService] ☁️ Uploading audio evidence: $audioPath');
+      }
+
+      var response = await request.send();
+      if (response.statusCode == 200) {
+        debugPrint('[CallService] ✅ Successfully posted to Global Blockchain Registry');
+      } else {
+        debugPrint('[CallService] ❌ Failed to post report: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('[CallService] Global reporting error: $e');
+    }
   }
 
   Future<void> _activateOverlay(String number, double risk, String type) async {
     try {
       final bool isGranted = await FlutterOverlayWindow.isPermissionGranted();
       if (!isGranted) {
-        debugPrint('[CallService] ⚠️ Cannot show overlay - Permission missing!');
+        debugPrint('[CallService] Overlay permission missing, requesting access again.');
+        await FlutterOverlayWindow.requestPermission();
         return;
       }
 
-      // 1. Force close any existing zombie overlay
-      await FlutterOverlayWindow.closeOverlay();
-      await Future.delayed(const Duration(milliseconds: 200));
+      final bool wasActive = await _isOverlayActive();
+      if (wasActive) {
+        // Already active — just send data update
+        _overlayActive = true;
+        showOverlay.value = true;
+        await _sendDataToOverlay(number, risk, type);
+        return;
+      }
 
-      // 2. Show Fresh Overlay with Retry logic
-      debugPrint('[CallService] 🛡️ Attempting to launch AI Guard Overlay for $number...');
+      debugPrint('[CallService] Attempting to launch AI Guard Overlay for $number...');
       
       bool success = false;
       for (int i = 0; i < 3; i++) {
@@ -424,27 +588,35 @@ class CallService {
             flag: OverlayFlag.defaultFlag,
             alignment: OverlayAlignment.centerRight,
             visibility: NotificationVisibility.visibilityPublic,
-            positionGravity: PositionGravity.right,
-            width: 300, 
-            height: 500,
+            width: _compactOverlaySize,
+            height: _compactOverlaySize,
           );
-          success = true;
-          debugPrint('[CallService] ✅ Overlay Show SUCCESS (Attempt ${i+1})');
-          break;
+
+          await Future.delayed(const Duration(milliseconds: 400));
+          success = await _isOverlayActive();
+          if (success) {
+            debugPrint('[CallService] Overlay show success on attempt ${i + 1}');
+            break;
+          }
         } catch (e) {
-          debugPrint('[CallService] ❌ Overlay Show FAILED (Attempt ${i+1}): $e');
-          await Future.delayed(const Duration(milliseconds: 500));
+          debugPrint('[CallService] Overlay show failed on attempt ${i + 1}: $e');
         }
+
+        await Future.delayed(const Duration(milliseconds: 500));
       }
       
+      _overlayActive = success;
+      showOverlay.value = success;
+
       if (!success) {
-        debugPrint('[CallService] 🚨 CRITICAL: Failed to show overlay after all attempts.');
+        debugPrint('[CallService] Failed to activate overlay after all retries.');
+        return;
       }
       
-      _overlayActive = true;
-      showOverlay.value = true;
       await _sendDataToOverlay(number, risk, type);
     } catch (e) {
+      _overlayActive = false;
+      showOverlay.value = false;
       debugPrint('[CallService] Overlay activation error: $e');
     }
   }
@@ -453,14 +625,55 @@ class CallService {
     for (int attempt = 0; attempt < 5; attempt++) {
       try {
         await Future.delayed(Duration(milliseconds: 300 + (attempt * 400)));
-        final bool isActive = await FlutterOverlayWindow.isActive();
+        final bool isActive = await _isOverlayActive();
         if (isActive) {
           await FlutterOverlayWindow.shareData({
             'type': type,
             'number': number,
             'risk': risk,
+            'emaRisk': _emaRisk,
             'isReal': _isRealAnalysis,
-            'isRecording': _isRecording, // Added recording status for UI indicator
+            'isRecording': _isRecording,
+            'showRecord': true,
+            'voiceSwitchCount': _voiceSwitchCount,
+          });
+          return;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+  /// Extended overlay push that includes pitch/frequency/voice-switch data.
+  Future<void> _sendDataToOverlayEnriched(
+    String number,
+    double risk,
+    String type, {
+    bool voiceSwitched = false,
+    int voiceSwitchCount = 0,
+    String pitchAnalysis = '',
+    String frequencyVariance = '',
+    bool identityMatch = false,
+  }) async {
+    for (int attempt = 0; attempt < 5; attempt++) {
+      try {
+        await Future.delayed(Duration(milliseconds: 300 + (attempt * 400)));
+        final bool isActive = await _isOverlayActive();
+        if (isActive) {
+          await FlutterOverlayWindow.shareData({
+            'type': type,
+            'number': number,
+            'risk': risk,
+            'emaRisk': _emaRisk,
+            'isReal': _isRealAnalysis,
+            'isRecording': _isRecording,
+            'showRecord': true,
+            'voiceSwitched': voiceSwitched,
+            'voiceSwitchCount': voiceSwitchCount,
+            'pitchAnalysis': pitchAnalysis,
+            'frequencyVariance': frequencyVariance,
+            'identityMatch': identityMatch,
           });
           return;
         }
@@ -471,24 +684,62 @@ class CallService {
   }
 
   Future<void> _closeOverlay() async {
+    // Cancel watchdog timer immediately
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
+    
     try {
-      final bool isActive = await FlutterOverlayWindow.isActive();
-      if (isActive) await FlutterOverlayWindow.closeOverlay();
+      final bool isActive = await _isOverlayActive();
+      if (!isActive) {
+        _overlayActive = false;
+        showOverlay.value = false;
+        return;
+      }
+
+      // Send 'close' signal so the overlay widget self-dismisses cleanly
+      try {
+        await FlutterOverlayWindow.shareData({'type': 'close'});
+        await Future.delayed(const Duration(milliseconds: 200));
+      } catch (_) {}
+
+      // Force close the overlay window
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          await FlutterOverlayWindow.closeOverlay();
+          await Future.delayed(const Duration(milliseconds: 150));
+          if (!await _isOverlayActive()) break;
+        } catch (_) {}
+      }
     } catch (e) {
-      debugPrint('[Call सर्विस] Overlay close error: $e');
+      debugPrint('[CallService] Overlay close error: $e');
     }
     _overlayActive = false;
     showOverlay.value = false;
   }
 
+  bool _isEndingSession = false;
+
   void _handleCallEnded() async {
-    debugPrint('[CallService] Call ended');
+    if (!_isInCall || _isEndingSession) return;
+    _isEndingSession = true;
+    final bool shouldPersistRecord = _callStartTime != null;
+    _isInCall = false; // Mark inactive immediately to stop analysis loops
     
+    // Cancel watchdog immediately
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
+    
+    debugPrint('[CallService] 🔚 Handling call ended event...');
+    
+    // Stop recording and analysis ASAP
     if (_isRecording) {
       await _audioRecorder.stop();
       _isRecording = false;
       _notifications.showRecordingNotification(isRecording: false);
     }
+
+    // End backend session tracking if active
+    await _endCallSession();
     
     await _closeOverlay();
     
@@ -500,7 +751,7 @@ class CallService {
       finalType = 'missed';
     }
     
-    if (_isInCall && _callStartTime != null) {
+    if (shouldPersistRecord) {
       int duration = DateTime.now().difference(_callStartTime!).inSeconds;
       double risk = currentRiskScore.value;
       String result = risk > 0.6 ? 'ai_blocked' : 'human_verified';
@@ -532,19 +783,24 @@ class CallService {
         blockHash: blockHash,
         aiModelUsed: _isRealAnalysis ? 'Wav2Vec2' : 'simulated',
         isRealAnalysis: _isRealAnalysis,
+        analysisSummary: _latestAnalysisSummary,
       ));
       
       onCallEnded?.call();
     }
     
     // Reset State
-    _isInCall = false;
     _currentNumber = '';
     _callStartTime = null;
     _callDirection = '';
     _callWasAnswered = false;
     _isRealAnalysis = false;
+    _latestAnalysisSummary = null;
+    _currentSessionId = null;
+    _voiceSwitchCount = 0;
+    _emaRisk = 0.0;
     currentRiskScore.value = 0.0;
+    _isEndingSession = false;
   }
 
   // Add demo record
@@ -581,6 +837,7 @@ class CallService {
 
   void dispose() {
     _phoneStateSubscription?.cancel();
+    _overlayMessageSubscription?.cancel();
     _audioRecorder.dispose();
     showOverlay.dispose();
     currentRiskScore.dispose();
@@ -608,4 +865,14 @@ class CallService {
     }
     return null;
   }
+
+  Future<bool> _isOverlayActive() async {
+    try {
+      return await FlutterOverlayWindow.isActive();
+    } catch (e) {
+      debugPrint('[CallService] Overlay active-state check failed: $e');
+      return false;
+    }
+  }
 }
+
