@@ -160,8 +160,14 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.get("/")
+@app.get("/index.html")
 async def root():
     return FileResponse("static/index.html")
+
+
+@app.get("/login.html")
+async def login_page():
+    return FileResponse("static/login.html")
 
 
 # ---------------------------------------------------------------------------
@@ -442,12 +448,25 @@ async def report_scam(
 
         conn = sqlite3.connect("registry.db")
         cursor = conn.cursor()
+        
+        # 🛡️ DUPLICATE PREVENTION: Check if number already registered
+        cursor.execute("SELECT id FROM global_registry WHERE phone_display = ?", (phone_display,))
+        if cursor.fetchone():
+            conn.close()
+            # Clean up the uploaded file if it exists to save space
+            if saved_path and os.path.exists(saved_path):
+                os.remove(saved_path)
+            raise HTTPException(
+                status_code=400,
+                detail=f"SECURITY CONFLICT: Number {phone_display} is already registered in the Cyber Crime Registry."
+            )
+
         cursor.execute(
             """INSERT INTO global_registry
-               (phone_hash, phone_display, verdict, threat_level, risk_score, audio_path, timestamp)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (phone_hash, phone_display, verdict, threat_level, risk_score, audio_path, timestamp, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (phone_hash, phone_display, verdict, threat_level, risk_score,
-             saved_path, time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
+             saved_path, time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'approved' if phone_hash.startswith('manual_block') else 'pending')
         )
         conn.commit()
         conn.close()
@@ -471,14 +490,49 @@ async def get_registry():
     conn.close()
     return [dict(row) for row in rows]
 
+@app.delete("/blockchain/revoke/{record_id}")
+async def revoke_record(record_id: int, api_key: str = Security(get_api_key)):
+    try:
+        conn = sqlite3.connect("registry.db")
+        cursor = conn.cursor()
+        
+        # Get path to delete file too
+        cursor.execute("SELECT audio_path FROM global_registry WHERE id = ?", (record_id,))
+        row = cursor.fetchone()
+        if row and row[0] and os.path.exists(row[0]):
+            try:
+                os.remove(row[0])
+            except:
+                pass
+            
+        cursor.execute("DELETE FROM global_registry WHERE id = ?", (record_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "Record revoked from consensus."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/blockchain/approve/{record_id}")
+async def approve_record(record_id: int, api_key: str = Security(get_api_key)):
+    try:
+        conn = sqlite3.connect("registry.db")
+        cursor = conn.cursor()
+        cursor.execute("UPDATE global_registry SET status = 'approved' WHERE id = ?", (record_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "Threat approved and broadcasted globally."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/blockchain/verify/")
 async def verify_number(number: str):
     conn = sqlite3.connect("registry.db")
     cursor = conn.cursor()
+    # Extract digits for flexible matching
     clean = "".join(filter(str.isdigit, number))
     cursor.execute(
-        "SELECT COUNT(*), threat_level FROM global_registry WHERE phone_display LIKE ?",
+        "SELECT COUNT(*), threat_level FROM global_registry WHERE phone_display LIKE ? AND status = 'approved'",
         (f"%{clean}%",)
     )
     count, level = cursor.fetchone()

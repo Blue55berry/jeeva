@@ -235,6 +235,10 @@ class CallService {
     if (securityInfo != null && securityInfo['is_blocked'] == 1) {
        currentRiskScore.value = 1.0;
        await _activateOverlay(_currentNumber, 1.0, 'blocked');
+       if (!_isManualRecording) {
+         debugPrint('[CallService] 🛡️ Auto-recording blocked known scammer for evidence...');
+         await toggleManualRecording();
+       }
        return;
     }
     
@@ -785,6 +789,16 @@ class CallService {
         isRealAnalysis: _isRealAnalysis,
         analysisSummary: _latestAnalysisSummary,
       ));
+      
+      // Auto-submit Cyber Crime Evidence for known/blocked scammers without delay
+      if (risk >= 0.8 && _callWasAnswered) {
+         debugPrint('[CallService] 🚨 Auto-submitting Cyber Crime Evidence...');
+         await _db.reportScam(
+           _currentNumber, 
+           risk, 
+           evidencePath: _recordingPath,
+         );
+      }
       
       onCallEnded?.call();
     }

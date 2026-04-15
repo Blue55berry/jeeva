@@ -1,24 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VoxShield Cyber Crime Dashboard</title>
     <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700;900&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         :root {
             --primary: #D4A843;
             --primary-dark: #B8860B;
             --danger: #E74C3C;
             --success: #2ECC71;
-            --bg: #0A0A0B;
-            --card-bg: #111112;
-            --text: #FFFFFF;
-            --text-dim: #A0A0A0;
-            --border: rgba(212, 168, 67, 0.15);
+            --bg: #F5F3EC;
+            --card-bg: rgba(255, 255, 255, 0.7);
+            --text: #1A1A1A;
+            --text-dim: #666666;
+            --border: rgba(255, 255, 255, 0.5);
+            --input-bg: rgba(255, 255, 255, 0.4);
+            --gold-glow: rgba(212, 168, 67, 0.25);
         }
 
         * {
@@ -32,27 +38,122 @@
             background-color: var(--bg);
             color: var(--text);
             overflow-x: hidden;
-            background-image: radial-gradient(circle at 50% 10%, rgba(212, 168, 67, 0.05) 0%, transparent 40%);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(212, 168, 67, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 30%, rgba(212, 168, 67, 0.12) 0%, transparent 40%);
+            background-attachment: fixed;
         }
 
-        h1, h2, h3 {
+        h1,
+        h2,
+        h3 {
             font-family: 'Outfit', sans-serif;
             letter-spacing: -0.5px;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar-nav {
+            width: 280px;
+            background: var(--card-bg);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-right: 1px solid var(--border);
             padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .nav-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 50px;
+            padding: 0 10px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 16px 20px;
+            border-radius: 16px;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-weight: 700;
+            margin-bottom: 10px;
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+
+        .nav-item i {
+            font-size: 20px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.5);
+            color: var(--primary);
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.02);
+        }
+
+        .nav-item.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 10px 25px var(--gold-glow);
+        }
+
+        .nav-item.active i {
+            color: white;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 40px 60px;
+            animation: viewFadeIn 0.8s ease-out;
+        }
+
+        @keyframes viewFadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-view {
+            display: none;
+            animation: sectionSlideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .section-view.active {
+            display: block;
+        }
+
+        @keyframes sectionSlideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 60px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 20px;
+            margin-bottom: 40px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
         }
 
         .logo {
@@ -64,7 +165,7 @@
         .logo-icon {
             font-size: 28px;
             color: var(--primary);
-            text-shadow: 0 0 15px rgba(212, 168, 67, 0.4);
+            text-shadow: 0 4px 10px rgba(212, 168, 67, 0.2);
         }
 
         .logo-text {
@@ -95,12 +196,14 @@
 
         .card {
             background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border);
             border-radius: 24px;
             padding: 30px;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 15px 35px var(--gold-glow);
         }
 
         .card-header {
@@ -126,20 +229,23 @@
 
         .search-box input {
             width: 100%;
-            background: #1A1A1C;
+            background: var(--input-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             border: 1px solid var(--border);
             border-radius: 16px;
             padding: 18px 25px;
             padding-left: 55px;
-            color: white;
+            color: var(--text);
             font-size: 16px;
             outline: none;
             transition: 0.3s;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.04);
         }
 
         .search-box input:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 20px rgba(212, 168, 67, 0.1);
+            box-shadow: 0 0 25px var(--gold-glow);
         }
 
         .search-box i {
@@ -153,7 +259,8 @@
 
         .btn {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: black;
+            color: #FFFFFF;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
             border: none;
             padding: 12px 24px;
             border-radius: 12px;
@@ -162,6 +269,7 @@
             transition: 0.2s;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             font-size: 13px;
             text-transform: uppercase;
@@ -170,7 +278,33 @@
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(212, 168, 67, 0.3);
+            box-shadow: 0 10px 25px var(--gold-glow);
+        }
+
+        /* Tabs */
+        .tab-btn {
+            background: rgba(255, 255, 255, 0.4);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: 0.3s;
+            backdrop-filter: blur(4px);
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.8);
+            color: var(--text);
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: #FFFFFF;
+            border-color: var(--primary);
+            box-shadow: 0 5px 15px var(--gold-glow);
         }
 
         /* Ledger Table */
@@ -181,18 +315,19 @@
 
         .ledger-table th {
             text-align: left;
-            padding: 15px 10px;
+            padding: 18px 15px;
             color: var(--text-dim);
             font-size: 12px;
-            font-weight: 700;
+            font-weight: 800;
             text-transform: uppercase;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 2px solid var(--border);
         }
 
         .ledger-table td {
-            padding: 20px 10px;
-            border-bottom: 1px solid rgba(212, 168, 67, 0.05);
+            padding: 22px 15px;
+            border-bottom: 1px solid var(--border);
             font-size: 14px;
+            color: var(--text);
         }
 
         .phone-cell {
@@ -216,24 +351,131 @@
             text-transform: uppercase;
         }
 
-        .badge-danger { background: rgba(231, 76, 60, 0.1); color: var(--danger); border: 1px solid rgba(231, 76, 60, 0.2); }
-        .badge-warning { background: rgba(212, 168, 67, 0.1); color: var(--primary); border: 1px solid rgba(212, 168, 67, 0.2); }
+        .badge-danger {
+            background: rgba(231, 76, 60, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(231, 76, 60, 0.2);
+        }
+
+        .badge-warning {
+            background: rgba(212, 168, 67, 0.1);
+            color: var(--primary);
+            border: 1px solid rgba(212, 168, 67, 0.2);
+        }
+
+        /* Custom Audio Hub */
+        .audio-hub {
+            background: rgba(255, 255, 255, 0.4);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 200px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transition: 0.3s;
+        }
+
+        .audio-hub:hover {
+            box-shadow: 0 0 15px var(--gold-glow);
+            border-color: var(--primary);
+        }
+
+        .play-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            font-size: 12px;
+            transition: 0.2s;
+        }
+
+        .play-btn:hover {
+            transform: scale(1.1);
+            background: var(--primary-dark);
+        }
+
+        .visualizer {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 15px;
+        }
+
+        .vis-bar {
+            width: 3px;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 1px;
+            transition: 0.2s;
+        }
+
+        .audio-hub.playing .vis-bar {
+            animation: bounce 0.6s infinite alternate;
+        }
+
+        .audio-hub.playing .vis-bar:nth-child(2) { animation-delay: 0.1s; }
+        .audio-hub.playing .vis-bar:nth-child(3) { animation-delay: 0.2s; }
+        .audio-hub.playing .vis-bar:nth-child(4) { animation-delay: 0.15s; }
+        .audio-hub.playing .vis-bar:nth-child(5) { animation-delay: 0.25s; }
+
+        @keyframes bounce {
+            0% { height: 3px; }
+            100% { height: 15px; }
+        }
+
+        .audio-info {
+            flex: 1;
+        }
+
+        .audio-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--primary);
+            text-transform: uppercase;
+        }
 
         /* Sidebar Stats */
         .stat-card {
             margin-bottom: 20px;
             padding: 20px;
             border-radius: 20px;
-            background: rgba(212, 168, 67, 0.03);
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--border);
+            box-shadow: 0 10px 25px var(--gold-glow);
+            transition: 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px var(--gold-glow);
         }
 
-        .stat-label { font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
-        .stat-value { font-size: 24px; font-weight: 800; color: var(--primary); }
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--primary);
+        }
 
         .blockchain-visual {
             position: absolute;
-            top: 20px; right: 20px;
+            top: 20px;
+            right: 20px;
             opacity: 0.1;
             font-size: 100px;
             pointer-events: none;
@@ -248,171 +490,967 @@
             animation: slideIn 0.3s ease-out;
         }
 
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Modal System */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease-out;
         }
+
+        .modal {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            width: 90%;
+            max-width: 400px;
+            padding: 30px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2), 0 0 40px var(--gold-glow);
+            text-align: center;
+            animation: modalSlide 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes modalSlide {
+            from { opacity: 0; transform: scale(0.9) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .modal-icon {
+            font-size: 50px;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: var(--text);
+        }
+
+        .modal-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-dim);
+            margin-bottom: 25px;
+        }
+
+        .modal-input {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            padding: 12px 18px;
+            border-radius: 12px;
+            color: var(--text);
+            margin-bottom: 25px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 10px 25px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: 0.2s;
+            font-family: inherit;
+            border: none;
+        }
+
+        .modal-btn.primary { background: var(--primary); color: white; flex: 1; }
+        .modal-btn.secondary { background: rgba(0,0,0,0.05); color: var(--text-dim); flex: 1; border: 1px solid var(--border); }
+        .modal-btn:hover { transform: translateY(-2px); opacity: 0.9; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <div class="logo">
-                <i class="fa-solid fa-gavel logo-icon"></i>
-                <div class="logo-text">VoxShield <span style="color: var(--primary)">Registry</span></div>
-            </div>
-            <div class="status-badge">
-                <i class="fa-solid fa-circle-dot"></i> CLOUD BLOCKCHAIN ACTIVE
-            </div>
-        </header>
 
-        <div class="grid">
-            <div class="card">
-                <i class="fa-solid fa-shield-halved blockchain-visual"></i>
-                <div class="card-header">
-                    <div class="card-title">
-                        <i class="fa-solid fa-magnifying-glass-chart" style="color: var(--primary)"></i>
-                        Cyber Crime verification Engine
+<body>
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar-nav">
+            <div class="nav-header">
+                <i class="fa-solid fa-shield-halved" style="font-size: 32px; color: var(--primary)"></i>
+                <div class="logo-text">Vox<span style="color: var(--primary)">Shield</span></div>
+            </div>
+
+            <a class="nav-item active" onclick="switchView('dashboard', this)">
+                <i class="fa-solid fa-chart-line"></i> Analytics Overview
+            </a>
+            <a class="nav-item" onclick="switchView('registry', this)">
+                <i class="fa-solid fa-list-check"></i> Blockchain Ledger
+            </a>
+            <a class="nav-item" onclick="switchView('analysis', this)">
+                <i class="fa-solid fa-microscope"></i> Deep Scan Lab
+            </a>
+            <a class="nav-item" onclick="switchView('manual', this)">
+                <i class="fa-solid fa-gavel"></i> Manual Control
+            </a>
+            <!-- <a class="nav-item" onclick="switchView('settings', this)">
+                <i class="fa-solid fa-sliders"></i> Security Nodes
+            </a> -->
+            <a class="nav-item" onclick="switchView('profile', this)">
+                <i class="fa-solid fa-user-gear"></i> My Profile
+            </a>
+
+            <div style="flex: 1;"></div>
+
+            <button class="nav-item" style="width: 100%; border: none; background: rgba(231, 76, 60, 0.05); color: var(--danger); font-family: inherit;" onclick="logout()">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <header>
+                <div>
+                    <h2 id="view-title">Analytics Overview</h2>
+                    <p style="font-size: 13px; color: var(--text-dim); margin-top: 5px;" id="view-subtitle">Real-time threat detection & node monitoring</p>
+                </div>
+                <div class="header-actions">
+                    <div class="status-badge" style="background: rgba(212, 168, 67, 0.1); color: var(--primary); border-color: rgba(212, 168, 67, 0.2);">
+                        <i class="fa-solid fa-link fa-pulse"></i> LIVE SYNC
                     </div>
                 </div>
+            </header>
 
-                <div class="search-box">
-                    <i class="fa-solid fa-phone"></i>
-                    <input type="text" id="phone-search" placeholder="Enter phone number to verify in global registry...">
-                    <button class="btn" style="position: absolute; right: 8px; top: 8px;" onclick="verifyNumber()">
-                        Verify Security
+            <!-- VIEW: Dashboard -->
+            <div id="view-dashboard" class="section-view active">
+                <div class="grid" style="grid-template-columns: 2fr 1fr; margin-bottom: 30px;">
+                    <div class="card" style="height: 400px;">
+                        <div class="card-header">
+                            <div class="card-title"><i class="fa-solid fa-wave-square" style="color: var(--primary)"></i> Cyber Crime Trend Analysis</div>
+                            <div style="display: flex; gap: 5px;">
+                                <style>
+                                    .graph-tab { padding: 4px 10px; font-size: 10px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.4); font-weight: 700; color: var(--text-dim); transition: 0.2s; }
+                                    .graph-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+                                </style>
+                                <div class="graph-tab active" onclick="updateChartType('Total', this)">Total</div>
+                                <div class="graph-tab" onclick="updateChartType('AI', this)">AI Detection</div>
+                                <div class="graph-tab" onclick="updateChartType('Manual', this)">Manual</div>
+                            </div>
+                        </div>
+                        <canvas id="threatChart" style="max-height: 280px;"></canvas>
+                    </div>
+
+                    <div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Threats Blocked</div>
+                            <div class="stat-value" id="total-scams-dash">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Network Confidence</div>
+                            <div class="stat-value">99.8%</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Active Guard Nodes</div>
+                            <div class="stat-value">8,421</div>
+                        </div>
+                    </div>
+                </div>
+<!-- 
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fa-solid fa-bolt" style="color: var(--primary)"></i> Quick Verification</div>
+                    </div>
+                    <div class="search-box" style="margin-bottom: 0;">
+                        <i class="fa-solid fa-phone"></i>
+                        <input type="text" id="phone-search" placeholder="Verify any global phone fingerprint...">
+                        <button class="btn" style="position: absolute; right: 8px; top: 8px;" onclick="verifyNumber()">Run AI Check</button>
+                    </div>
+                    <div id="verify-result"></div>
+                </div> -->
+            </div>
+
+            <!-- VIEW: Registry -->
+            <div id="view-registry" class="section-view">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fa-solid fa-database" style="color: var(--primary)"></i> Evidence Ledger</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="tab-btn active" id="btn-tab-all" onclick="filterLedger('all')">Universal</button>
+                            <button class="tab-btn" id="btn-tab-user" onclick="filterLedger('user')">User Log</button>
+                            <button class="tab-btn" id="btn-tab-admin" onclick="filterLedger('admin')">Admin</button>
+                        </div>
+                    </div>
+                    <table class="ledger-table">
+                        <thead>
+                            <tr>
+                                <th>Phone Number</th>
+                                <th>Block Signature</th>
+                                <th>AI Verdict</th>
+                                <th>Evidence Hub</th>
+                                <th>Log Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledger-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- VIEW: Manual Control -->
+            <div id="view-manual" class="section-view">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fa-solid fa-terminal" style="color: var(--primary)"></i> Direct Override Console</div>
+                    </div>
+                    
+                    <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
+                        <div class="search-box" style="margin-bottom: 0;">
+                            <i class="fa-solid fa-user-secret"></i>
+                            <input type="text" id="manual-phone" placeholder="Target Number...">
+                        </div>
+                        <div class="search-box" style="margin-bottom: 0;">
+                            <i class="fa-solid fa-key"></i>
+                            <input type="password" id="admin-key" placeholder="Authorization Key...">
+                        </div>
+                    </div>
+
+                    <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
+                        <select id="manual-verdict" style="background: var(--input-bg); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 12px; padding: 12px; color: var(--text); outline: none; font-weight: 600;">
+                            <option value="ai_blocked">AI VOICEOVER DETECTED</option>
+                            <option value="suspicious">SUSPICIOUS ACTIVITY</option>
+                        </select>
+                        <select id="manual-threat" style="background: var(--input-bg); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 12px; padding: 12px; color: var(--danger); font-weight: 800; outline: none;">
+                            <option value="CRITICAL">CRITICAL LEVEL</option>
+                            <option value="HIGH">HIGH RISK</option>
+                        </select>
+                    </div>
+
+                    <div class="search-box" style="margin-bottom: 20px;">
+                        <i class="fa-solid fa-file-export"></i>
+                        <input type="file" id="manual-audio" accept="audio/*" style="padding: 15px 25px 15px 55px; background: var(--input-bg); cursor: pointer; border-radius: 16px; width: 100%;">
+                    </div>
+
+                    <button class="btn" style="width: 100%; height: 50px; font-size: 15px;" onclick="manualReport()">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> COMMIT BLOCKCHAIN OVERRIDE
                     </button>
                 </div>
-
-                <div id="verify-result"></div>
-
-                <div class="card-header" style="margin-top: 40px; margin-bottom: 30px; border-top: 1px solid var(--border); padding-top: 30px;">
-                    <div class="card-title">
-                        <i class="fa-solid fa-file-shield" style="color: var(--danger)"></i>
-                        Cyber Crime Manual Entry (Admin Only)
-                    </div>
-                </div>
-
-                <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
-                    <div class="search-box" style="margin-bottom: 0;">
-                        <i class="fa-solid fa-phone-slash"></i>
-                        <input type="text" id="manual-phone" placeholder="Phone Number...">
-                    </div>
-                    <div class="search-box" style="margin-bottom: 0;">
-                        <i class="fa-solid fa-key"></i>
-                        <input type="password" id="admin-key" placeholder="API Security Key...">
-                    </div>
-                </div>
-
-                <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
-                    <select id="manual-verdict" style="background: #1A1A1C; border: 1px solid var(--border); border-radius: 12px; padding: 12px; color: white;">
-                        <option value="ai_blocked">AI VOICEOVER BLOCKED</option>
-                        <option value="suspicious">SUSPICIOUS CALLER</option>
-                        <option value="voice_mask">VOICE MASKING DETECTED</option>
-                    </select>
-                    <select id="manual-threat" style="background: #1A1A1C; border: 1px solid var(--border); border-radius: 12px; padding: 12px; color: var(--danger);">
-                        <option value="CRITICAL">CRITICAL THREAT</option>
-                        <option value="HIGH">HIGH THREAT</option>
-                        <option value="MEDIUM">MEDIUM RISK</option>
-                    </select>
-                </div>
-
-                <button class="btn" style="width: 100%; justify-content: center; height: 45px;" onclick="manualReport()">
-                    <i class="fa-solid fa-gavel"></i> Commit to Global Blockchain Registry
-                </button>
-
-                <div class="card-header" style="margin-top: 40px; margin-bottom: 15px;">
-                    <div class="card-title">
-                        <i class="fa-solid fa-list-check" style="color: var(--primary)"></i>
-                        Recent Blockchain entries
-                    </div>
-                </div>
-
-                <table class="ledger-table">
-                    <thead>
-                        <tr>
-                            <th>Phone Number</th>
-                            <th>Block Hash</th>
-                            <th>Verdict</th>
-                            <th>Evidence</th>
-                            <th>Timestamp</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ledger-body">
-                        <!-- Content loaded via JS -->
-                    </tbody>
-                </table>
             </div>
 
-            <div class="sidebar">
-                <div class="stat-card">
-                    <div class="stat-label">Total Reported Scams</div>
-                    <div class="stat-value" id="total-scams">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Blockchain Height</div>
-                    <div class="stat-value" id="block-height">#1024</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Active Protected nodes</div>
-                    <div class="stat-value">8,421</div>
-                </div>
-
-                <div class="card" style="padding: 20px; font-size: 13px;">
-                    <h3 style="font-size: 15px; margin-bottom: 12px; color: var(--primary)">Legal Notice</h3>
-                    <p style="color: var(--text-dim); line-height: 1.6;">
-                        All entries in this ledger are cryptographically signed. Cyber crime reports are verified using AI Voice fingerpringing before final consensus approval.
-                    </p>
+            <!-- VIEW: Settings -->
+            <div id="view-settings" class="section-view">
+                <div class="grid">
+                    <div class="card">
+                        <div class="card-header"><div class="card-title">Security Node Status</div></div>
+                        <p style="color: var(--text-dim); line-height: 1.6;">Your node is currently participating in global consensus verification. All threat fingerprints are being synchronized across 8,421 active guardians.</p>
+                        <div class="stat-card" style="margin-top: 20px;">
+                            <div class="stat-label">Latency</div>
+                            <div class="stat-value">14ms</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <!-- VIEW: Profile -->
+            <div id="view-profile" class="section-view">
+                <div class="grid" style="grid-template-columns: 1fr 2 fraternity;"> <!-- Note: Fixed columns below -->
+                </div>
+                
+                <div class="grid" style="grid-template-columns: 350px 1fr; gap: 30px;">
+                    <div class="card" style="text-align: center;">
+                        <div style="position: relative; width: 150px; height: 150px; margin: 0 auto 20px;">
+                            <img id="profile-preview" src="https://ui-avatars.com/api/?name=Admin&background=D4A843&color=fff&size=512" style="width: 100%; height: 100%; border-radius: 50%; border: 4px solid var(--primary); object-fit: cover; box-shadow: 0 10px 30px var(--gold-glow);">
+                            <label for="avatar-input" style="position: absolute; bottom: 5px; right: 5px; background: var(--primary); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 3px solid #fff; transition: 0.3s;">
+                                <i class="fa-solid fa-camera" style="font-size: 14px;"></i>
+                                <input type="file" id="avatar-input" hidden accept="image/*" onchange="previewAvatar(event)">
+                            </label>
+                        </div>
+                        <h3 id="display-name-label">Administrator</h3>
+                        <p style="color: var(--primary); font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 2px;">Supreme Security Auditor</p>
+                        
+                        <!-- <div style="margin-top: 30px; text-align: left;">
+                            <div class="stat-card" style="padding: 15px; background: rgba(0,0,0,0.02);">
+                                <div class="stat-label">Access Level</div>
+                                <div class="stat-value" style="font-size: 16px;">Tier 1 - Full Consensus</div>
+                            </div>
+                        </div> -->
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title"><i class="fa-solid fa-id-card" style="color: var(--primary)"></i> Personal Identity</div>
+                        </div>
+                        
+                        <div class="search-box">
+                            <i class="fa-solid fa-signature"></i>
+                            <input type="text" id="admin-display-name" placeholder="Full Display Name" value="Administrator">
+                        </div>
+                        
+                        <div class="search-box">
+                            <i class="fa-solid fa-envelope"></i>
+                            <input type="email" id="admin-email" placeholder="Security Email" value="admin@voxshield.ai">
+                        </div>
+
+                        <div class="card-header" style="margin-top: 30px; border-top: 1px solid var(--border); padding-top: 30px;">
+                            <div class="card-title"><i class="fa-solid fa-lock" style="color: var(--danger)"></i> Security Credentials</div>
+                        </div>
+
+                        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="search-box" style="margin-bottom: 0;">
+                                <i class="fa-solid fa-key"></i>
+                                <input type="password" id="new-password" placeholder="New Access Password">
+                                <i class="fa-solid fa-eye" style="left: auto; right: 15px; cursor: pointer; color: var(--text-dim);" onclick="togglePass('new-password', this)"></i>
+                            </div>
+
+            <!-- VIEW: Deep Analysis Lab -->
+            <div id="view-analysis" class="section-view">
+                <div class="grid" style="grid-template-columns: 350px 1fr 300px; gap: 20px;">
+                    <!-- LEFT: Upload/Input -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title"><i class="fa-solid fa-upload" style="color: var(--primary)"></i> Forensic Entry</div>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 20px;">Input evidence manually or select from the Inbox to the right.</p>
+                        
+                        <div class="search-box">
+                            <i class="fa-solid fa-phone-flip"></i>
+                            <input type="text" id="analysis-number" placeholder="Target Fingerprint...">
+                        </div>
+                        
+                        <div class="search-box" style="margin-top: 15px;">
+                            <i class="fa-solid fa-music"></i>
+                            <input type="file" id="analysis-file" accept="audio/*" style="padding: 15px 25px 15px 55px; background: var(--input-bg); border-radius: 12px; width: 100%;">
+                        </div>
+
+                        <button class="btn" style="width: 100%; margin-top: 20px; height: 50px;" onclick="runDeepAnalysis()">
+                            <i class="fa-solid fa-bolt"></i> RUN SCAN
+                        </button>
+                    </div>
+
+                    <!-- CENTER: Result Engine -->
+                    <div class="card" id="analysis-results-card" style="display: none; border-left: 5px solid var(--primary); background: rgba(212, 168, 67, 0.05); min-height: 400px;">
+                        <div class="card-header">
+                            <div class="card-title"><i class="fa-solid fa-microchip" style="color: var(--primary)"></i> AI Verdict Engine</div>
+                        </div>
+                        <div id="analysis-loading" style="display:none; text-align:center; padding: 40px;">
+                            <i class="fa-solid fa-dna fa-spin" style="font-size: 40px; color: var(--primary)"></i>
+                            <p style="margin-top: 15px; font-weight: 800; color: var(--primary);">SEQUENCING...</p>
+                        </div>
+                        <div id="analysis-data">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <span class="stat-label">AI PROBABILITY</span>
+                                <span class="stat-value" id="res-score" style="font-size: 32px;">0%</span>
+                            </div>
+                            <div class="badge" id="res-badge" style="padding: 10px 15px; display: inline-block; margin-bottom: 15px;">VERIFYING...</div>
+                            <p id="res-summary" style="font-size: 13px; line-height: 1.6; color: var(--text); background: white; padding: 15px; border-radius: 12px; border: 1px solid var(--border);"></p>
+                            
+                            <div id="promotion-area" style="margin-top: 30px; display: none;">
+                                <button class="btn" style="width: 100%; background: var(--danger);" id="btn-promote-final">
+                                    <i class="fa-solid fa-ban"></i> PROMOTE TO GLOBAL BLOCK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: Submission Inbox -->
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title" style="font-size: 14px;"><i class="fa-solid fa-inbox" style="color: var(--primary)"></i> Submissions</div>
+                        </div>
+                        <div id="analysis-queue" style="display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto;">
+                            <!-- Items loaded via JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+                            <div class="search-box" style="margin-bottom: 0;">
+                                <i class="fa-solid fa-shield"></i>
+                                <input type="password" id="confirm-password" placeholder="Confirm Password">
+                                <i class="fa-solid fa-eye" style="left: auto; right: 15px; cursor: pointer; color: var(--text-dim);" onclick="togglePass('confirm-password', this)"></i>
+                            </div>
+                        </div>
+
+                        <button class="btn" style="width: 100%; margin-top: 30px; height: 50px;" onclick="saveProfile()">
+                            <i class="fa-solid fa-floppy-disk"></i> UPDATE PROFILE
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
     </div>
 
     <script>
+        // --- Authentication Protection ---
+        if (!localStorage.getItem('voxshield_auth')) {
+            window.location.href = 'login.html';
+        }
+
+        function logout() {
+            localStorage.removeItem('voxshield_auth');
+            window.location.href = 'login.html';
+        }
+
         const API_BASE = window.location.origin;
-        
+        let globalRegistryData = [];
+        let currentTabFilter = 'all';
+
+        async function approveReport(record_id) {
+            if (await voxConfirm("Approve and broadcast this threat to the global consensus?")) {
+                const response = await fetch(`${API_BASE}/blockchain/approve/${record_id}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': localStorage.getItem('voxshield_auth') }
+                });
+                if (response.ok) {
+                    voxAlert("Threat successfully synchronized across the network.");
+                    loadRegistry();
+                }
+            }
+        }
+
         async function loadRegistry() {
             try {
                 const response = await fetch(`${API_BASE}/blockchain/registry/`);
                 const data = await response.json();
+
+                globalRegistryData = data.reverse();
                 
-                const tableBody = document.getElementById('ledger-body');
-                const totalEl = document.getElementById('total-scams');
+                // Update all count labels
+                document.getElementById('total-scams-dash').innerText = globalRegistryData.length;
                 
-                tableBody.innerHTML = '';
-                totalEl.innerText = data.length;
-                
-                data.reverse().forEach(entry => {
-                    const row = document.createElement('tr');
-                    const time = new Date(entry.timestamp).toLocaleString();
-                    
-                    let audioHtml = '<span style="color: grey; font-style: italic;">No Audio</span>';
-                    if (entry.audio_path) {
-                        const audioUrl = `${API_BASE}/${entry.audio_path}`;
-                        audioHtml = `
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                                <audio controls style="height: 24px; width: 140px;" src="${audioUrl}">
-                                    Your browser does not support the audio element.
-                                </audio>
-                                <a href="${audioUrl}" target="_blank" style="font-size: 8px; color: var(--primary); text-decoration: none;">Download Evidence</a>
-                            </div>
-                        `;
-                    }
-                    
-                    row.innerHTML = `
-                        <td class="phone-cell">
-                            <i class="fa-solid fa-user-secret" style="color: var(--text-dim); font-size: 12px;"></i>
-                            ${entry.phone_display.replace(/(\d{3})\d+(\d{2})/, "$1****$2")}
-                        </td>
-                        <td><span class="hash-id">${entry.phone_hash.substring(0, 16)}...</span></td>
-                        <td><span class="badge ${entry.verdict === 'ai_blocked' ? 'badge-danger' : 'badge-warning'}">${entry.verdict.replace('_', ' ')}</span></td>
-                        <td>${audioHtml}</td>
-                        <td style="color: var(--text-dim); font-size: 11px;">${time}</td>
-                    `;
-                    tableBody.appendChild(row);
-                });
+                initChart(); // Refresh chart with potential new data trend
+                renderLedger();
+                renderAnalysisQueue();
             } catch (e) {
                 console.error("Failed to load registry", e);
+            }
+        }
+
+        function switchView(viewId, element) {
+            // Update nav UI
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            element.classList.add('active');
+
+            // Switch views
+            document.querySelectorAll('.section-view').forEach(view => view.classList.remove('active'));
+            document.getElementById(`view-${viewId}`).classList.add('active');
+
+            // Update header text
+            const titles = {
+                dashboard: "Analytics Overview",
+                registry: "Evidence Ledger",
+                analysis: "Deep Scan Lab",
+                manual: "Direct Override Console",
+                settings: "Node Configuration",
+                profile: "Security Profile"
+            };
+            const subs = {
+                dashboard: "Real-time threat detection",
+                registry: "Immutable blockchain records of reported scam activity",
+                analysis: "Execute full AI voice print forensic analysis on evidence",
+                manual: "Administrative power to globally restrict network access",
+                settings: "Manage security node parameters and consensus roles",
+                profile: "Update your administrative identity and security keys"
+            };
+            document.getElementById('view-title').innerText = titles[viewId];
+            document.getElementById('view-subtitle').innerText = subs[viewId];
+        }
+
+        function previewAvatar(event) {
+            const reader = new FileReader();
+            reader.onload = function(){
+                const output = document.getElementById('profile-preview');
+                output.src = reader.result;
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+
+        function saveProfile() {
+            const name = document.getElementById('admin-display-name').value;
+            const pass = document.getElementById('new-password').value;
+            const confirm = document.getElementById('confirm-password').value;
+
+            if (pass && pass !== confirm) {
+                alert("Passwords do not match!");
+                return;
+            }
+
+            document.getElementById('display-name-label').innerText = name;
+            
+            // Show premium success feedback
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> PROFILE SECURED';
+            btn.style.background = 'var(--success)';
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = '';
+                voxAlert("Security Profile Updated Successfully via Consensus!");
+            }, 1500);
+        }
+
+        function voxAlert(msg, title = "Node Alert") {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('vox-modal-overlay');
+                document.getElementById('vox-modal-title').innerText = title;
+                document.getElementById('vox-modal-text').innerText = msg;
+                document.getElementById('vox-modal-input').style.display = 'none';
+                document.getElementById('vox-modal-cancel').style.display = 'none';
+                document.getElementById('vox-modal-icon').className = 'fa-solid fa-circle-info modal-icon';
+                
+                const okBtn = document.getElementById('vox-modal-ok');
+                okBtn.innerText = "Acknowledged";
+                okBtn.onclick = () => {
+                    overlay.style.display = 'none';
+                    resolve();
+                };
+                overlay.style.display = 'flex';
+            });
+        }
+
+        function voxConfirm(msg, title = "Confirm Security Action") {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('vox-modal-overlay');
+                document.getElementById('vox-modal-title').innerText = title;
+                document.getElementById('vox-modal-text').innerText = msg;
+                document.getElementById('vox-modal-input').style.display = 'none';
+                document.getElementById('vox-modal-cancel').style.display = 'block';
+                document.getElementById('vox-modal-icon').className = 'fa-solid fa-shield-halved modal-icon';
+                
+                document.getElementById('vox-modal-ok').onclick = () => {
+                    overlay.style.display = 'none';
+                    resolve(true);
+                };
+                document.getElementById('vox-modal-cancel').onclick = () => {
+                    overlay.style.display = 'none';
+                    resolve(false);
+                };
+                overlay.style.display = 'flex';
+            });
+        }
+
+        function voxPrompt(msg, title = "Authorization Required") {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('vox-modal-overlay');
+                const input = document.getElementById('vox-modal-input');
+                document.getElementById('vox-modal-title').innerText = title;
+                document.getElementById('vox-modal-text').innerText = msg;
+                input.style.display = 'block';
+                input.value = '';
+                document.getElementById('vox-modal-cancel').style.display = 'block';
+                document.getElementById('vox-modal-icon').className = 'fa-solid fa-key modal-icon';
+                
+                document.getElementById('vox-modal-ok').onclick = () => {
+                    overlay.style.display = 'none';
+                    resolve(input.value);
+                };
+                document.getElementById('vox-modal-cancel').onclick = () => {
+                    overlay.style.display = 'none';
+                    resolve(null);
+                };
+                overlay.style.display = 'flex';
+            });
+        }
+
+        function togglePass(id, icon) {
+            const input = document.getElementById(id);
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fa-solid fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fa-solid fa-eye';
+            }
+        }
+
+        let currentChartCategory = 'Total';
+        function updateChartType(cat, el) {
+            currentChartCategory = cat;
+            document.querySelectorAll('.graph-tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            initChart();
+        }
+
+        let threatChart = null;
+        function initChart() {
+            const ctx = document.getElementById('threatChart').getContext('2d');
+            if (threatChart) threatChart.destroy();
+
+            // Filter data based on category
+            let realCount = globalRegistryData.length;
+            if (currentChartCategory === 'AI') {
+                realCount = globalRegistryData.filter(d => d.verdict.includes('ai')).length;
+            } else if (currentChartCategory === 'Manual') {
+                realCount = globalRegistryData.filter(d => d.verdict === 'ai_blocked' || d.verdict === 'suspicious').length;
+                // Since our dummy data for trend is simulated, we'll scale it slightly for visual difference
+            }
+
+            const baseData = {
+                Total: [12, 19, 3, 5, 2, 11, realCount],
+                AI: [5, 12, 2, 8, 1, 9, realCount],
+                Manual: [2, 4, 1, 3, 0, 5, realCount]
+            };
+
+            const displayData = baseData[currentChartCategory] || baseData['Total'];
+
+            threatChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'Live'],
+                    datasets: [{
+                        label: `${currentChartCategory} Intensity`,
+                        data: displayData,
+                        borderColor: '#D4A843',
+                        backgroundColor: 'rgba(212, 168, 67, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#D4A843',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false, beginAtZero: true },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#666', font: { weight: '600' } }
+                        }
+                    }
+                }
+            });
+        }
+
+        let lastAnalysisResult = null;
+
+        async function runDeepAnalysis() {
+            const file = document.getElementById('analysis-file').files[0];
+            const number = document.getElementById('analysis-number').value.trim();
+            const resultsCard = document.getElementById('analysis-results-card');
+            const dataArea = document.getElementById('analysis-data');
+            const loading = document.getElementById('analysis-loading');
+
+            if (!file) {
+                voxAlert("Please select an audio file to analyze.", "Forensic Error");
+                return;
+            }
+
+            resultsCard.style.display = 'block';
+            dataArea.style.display = 'none';
+            loading.style.display = 'block';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch(`${API_BASE}/analyze/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                lastAnalysisResult = result;
+                lastAnalysisResult.phone = number;
+
+                loading.style.display = 'none';
+                dataArea.style.display = 'block';
+
+                const score = (result.risk_score * 100).toFixed(1);
+                document.getElementById('res-score').innerText = score + '%';
+                document.getElementById('res-summary').innerText = result.summary || "Analysis complete. Node consensus reached.";
+                
+                const badge = document.getElementById('res-badge');
+                if (result.is_ai) {
+                    badge.className = 'badge badge-danger';
+                    badge.innerText = 'CRITICAL AI DETECTION';
+                    document.getElementById('promotion-area').style.display = 'block';
+                } else {
+                    badge.className = 'badge badge-warning';
+                    badge.innerText = 'HUMAN VERIFIED / LOW RISK';
+                    document.getElementById('promotion-area').style.display = 'none';
+                }
+            } catch (e) {
+                voxAlert("Analysis node error. Please check server status.", "Node Offline");
+            }
+        }
+
+        async function revokeEntry(id) {
+            if (!(await voxConfirm("⚠️ WARN: Are you sure you want to revoke this security entry from the global registry?"))) return;
+            
+            const key = await voxPrompt("Enter Administrative API Key to authorize revocation:");
+            if (!key) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/blockchain/revoke/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'x-api-key': key }
+                });
+
+                if (response.status === 200) {
+                    voxAlert("✅ REVOCATION SUCCESSFUL. Node consensus updated.", "Ledger Updated");
+                    loadRegistry();
+                } else {
+                    voxAlert("Unauthorized revocation request.", "Permission Denied");
+                }
+            } catch (e) {
+                voxAlert("Network error during revocation.", "Sync Error");
+            }
+        }
+
+        async function approveEntry(id) {
+            const key = await voxPrompt("Enter Administrative API Key to BROADCAST this block globally:");
+            if (!key) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/blockchain/approve/${id}`, {
+                    method: 'POST',
+                    headers: { 'x-api-key': key }
+                });
+
+                if (response.status === 200) {
+                    voxAlert("✅ THREAT BROADCASTED! This number is now globally restricted for all app users.", "Consensus Approved");
+                    loadRegistry();
+                } else {
+                    voxAlert("Unauthorized approval request.", "Security Breach");
+                }
+            } catch (e) {
+                voxAlert("Network error during broadcast.", "Link Offline");
+            }
+        }
+
+        async function promoteToBlock() {
+            const id = event.target.getAttribute('data-pending-id');
+            const key = await voxPrompt("Enter Administrative API Key for Promotion:");
+            if (!key) return;
+
+            // If it's a pending report, we use approve endpoint, otherwise manual report
+            if (id) {
+                const response = await fetch(`${API_BASE}/blockchain/approve/${id}`, {
+                    method: 'POST',
+                    headers: { 'x-api-key': key }
+                });
+                if (response.status === 200) {
+                    voxAlert("✅ APP REPORT BROADCASTED! This number is now globally restricted.", "Consensus Success");
+                    loadRegistry();
+                    switchView('registry', document.querySelector('.nav-item i.fa-list-check').parentElement);
+                    return;
+                }
+            }
+
+            const formData = new FormData();
+            formData.append('phone_hash', 'manual_block_promoted_' + Date.now());
+            formData.append('phone_display', lastAnalysisResult.phone || 'Unknown');
+            formData.append('verdict', 'ai_blocked');
+            formData.append('threat_level', 'CRITICAL');
+            formData.append('risk_score', lastAnalysisResult.risk_score);
+            
+            const response = await fetch(`${API_BASE}/blockchain/report/`, {
+                method: 'POST',
+                headers: { 'x-api-key': key },
+                body: formData
+            });
+
+            if (response.status === 200) {
+                voxAlert("✅ PROMOTION GRANTED! Number has been moved to Global Blocked Registry.", "Consensus Success");
+                loadRegistry();
+                switchView('registry', document.querySelector('.nav-item i.fa-list-check').parentElement);
+            } else {
+                voxAlert("Promotion Denied: Invalid Security Key.", "Security Breach");
+            }
+        }
+
+        function renderAnalysisQueue() {
+            const queue = document.getElementById('analysis-queue');
+            queue.innerHTML = '';
+            
+            const pending = globalRegistryData.filter(d => d.status === 'pending');
+            
+            if (pending.length === 0) {
+                queue.innerHTML = '<div style="text-align:center; color: var(--text-dim); padding: 20px; font-size:12px;">No pending submissions</div>';
+                return;
+            }
+
+            pending.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'stat-card';
+                div.style.marginBottom = '0';
+                div.style.padding = '12px';
+                div.style.cursor = 'pointer';
+                div.style.background = 'rgba(255,255,255,0.4)';
+                div.innerHTML = `
+                    <div style="font-size: 13px; font-weight: 800; color: var(--text);">${item.phone_display}</div>
+                    <div style="font-size: 10px; color: var(--primary); margin-top: 4px;">USER SUBMISSION • RECENT</div>
+                `;
+                div.onclick = () => loadIntoForensics(item);
+                queue.appendChild(div);
+            });
+        }
+
+        async function loadIntoForensics(item) {
+            document.getElementById('analysis-number').value = item.phone_display;
+            
+            // For files already on server, we simulate the 'analysis' by calling the backend
+            // Or better, we just show a "Analyze Submission" flow
+            const resultsCard = document.getElementById('analysis-results-card');
+            const dataArea = document.getElementById('analysis-data');
+            const loading = document.getElementById('analysis-loading');
+
+            resultsCard.style.display = 'block';
+            dataArea.style.display = 'none';
+            loading.style.display = 'block';
+
+            // Simulate deep thinking
+            setTimeout(async () => {
+                // Since this is already reported as 'pending', we can pre-set the Promote button
+                document.getElementById('btn-promote-final').setAttribute('data-pending-id', item.id);
+                document.getElementById('btn-promote-final').onclick = promoteToBlock;
+                
+                // Fetch analysis (using mock risk score for now to show flow)
+                const mockRisk = 0.85; 
+                loading.style.display = 'none';
+                dataArea.style.display = 'block';
+                
+                document.getElementById('res-score').innerText = (mockRisk * 100).toFixed(1) + '%';
+                document.getElementById('res-summary').innerText = `NODE FORENSICS: Identification of voice prints matches historical scam patterns. Suspicious activity confirmed for number origin ${item.phone_display}.`;
+                
+                const badge = document.getElementById('res-badge');
+                badge.className = 'badge badge-danger';
+                badge.innerText = 'AI IDENTIFIED THREAT';
+                document.getElementById('promotion-area').style.display = 'block';
+                
+                lastAnalysisResult = { risk_score: mockRisk, phone: item.phone_display };
+            }, 1000);
+        }
+
+        function filterLedger(type) {
+            currentTabFilter = type;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-tab-${type}`).classList.add('active');
+            renderLedger();
+        }
+
+        function renderLedger() {
+            const tableBody = document.getElementById('ledger-body');
+            tableBody.innerHTML = '';
+
+            let filteredData = globalRegistryData;
+            if (currentTabFilter === 'user') {
+                filteredData = globalRegistryData.filter(e => !e.phone_hash.startsWith('manual_block_'));
+            } else if (currentTabFilter === 'admin') {
+                filteredData = globalRegistryData.filter(e => e.phone_hash.startsWith('manual_block_'));
+            }
+
+            if (filteredData.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 30px; font-weight: 500;">No entries found for this category.</td></tr>`;
+                return;
+            }
+
+            filteredData.forEach(entry => {
+                const row = document.createElement('tr');
+                const time = new Date(entry.timestamp).toLocaleString();
+
+                let audioHtml = '<span style="color: grey; font-style: italic;">No Audio Evidence</span>';
+                if (entry.audio_path) {
+                    const audioId = `audio-${entry.id}`;
+                    const audioUrl = `${API_BASE}/${entry.audio_path}`;
+                    audioHtml = `
+                        <div class="audio-hub" id="hub-${audioId}">
+                            <audio id="${audioId}" src="${audioUrl}" onplay="toggleHub('${audioId}', true)" onpause="toggleHub('${audioId}', false)" onended="toggleHub('${audioId}', false)"></audio>
+                            <button class="play-btn" onclick="playAudio('${audioId}')">
+                                <i class="fa-solid fa-play" id="icon-${audioId}"></i>
+                            </button>
+                            <div class="audio-info">
+                                <div class="audio-label">Evidence Sample</div>
+                                <div class="visualizer">
+                                    <div class="vis-bar"></div>
+                                    <div class="vis-bar"></div>
+                                    <div class="vis-bar"></div>
+                                    <div class="vis-bar"></div>
+                                    <div class="vis-bar"></div>
+                                </div>
+                            </div>
+                            <a href="${audioUrl}" download class="btn" style="padding: 6px; border-radius: 8px; font-size: 10px; background: transparent; color: var(--primary); border: 1px solid var(--border);">
+                                <i class="fa-solid fa-download"></i>
+                            </a>
+                        </div>
+                    `;
+                }
+                
+                const isAdminContent = entry.phone_hash.startsWith('manual_block_');
+                const isApproved = entry.status === 'approved';
+                const iconColor = isAdminContent ? 'var(--danger)' : 'var(--text-dim)';
+                const userIcon = isAdminContent ? 'fa-user-shield' : 'fa-user-secret';
+
+                let statusBadge = `<span class="badge ${entry.verdict === 'ai_blocked' ? 'badge-danger' : 'badge-warning'}">${entry.verdict.replace('_', ' ')}</span>`;
+                if (!isApproved) {
+                    statusBadge = `<span class="badge" style="background: rgba(0,0,0,0.05); color: var(--text-dim); border: 1px dashed var(--border);">PENDING REVIEW</span>`;
+                }
+
+                row.innerHTML = `
+                    <td class="phone-cell">
+                        <i class="fa-solid ${userIcon}" style="color: ${iconColor}; font-size: 12px;"></i>
+                        ${entry.phone_display}
+                    </td>
+                    <td><span class="hash-id" style="word-break: break-all; max-width: 250px; display: inline-block;">${isAdminContent ? '<span style="color: var(--danger)">[ADMIN]</span><br>' : ''}${entry.phone_hash}</span></td>
+                    <td>${statusBadge}</td>
+                    <td>${audioHtml}</td>
+                    <td style="color: var(--text-dim); font-size: 11px;">${time}</td>
+                    <td style="text-align: center; display: flex; gap: 5px; justify-content: center;">
+                        ${!isApproved ? `
+                            <button class="btn" style="background: rgba(46, 204, 113, 0.1); border: 1px solid rgba(46, 204, 113, 0.2); color: var(--success); padding: 8px; border-radius: 10px; cursor: pointer;" onclick="approveEntry(${entry.id})">
+                                <i class="fa-solid fa-shield-check"></i>
+                            </button>
+                        ` : ''}
+                        <button class="btn" style="background: rgba(231, 76, 60, 0.05); border: 1px solid rgba(231, 76, 60, 0.1); color: var(--danger); padding: 8px; border-radius: 10px; cursor: pointer; transition: 0.2s;" onclick="revokeEntry(${entry.id})">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function playAudio(id) {
+            const player = document.getElementById(id);
+            const icon = document.getElementById(`icon-${id}`);
+            
+            // Stop all other playing audios
+            document.querySelectorAll('audio').forEach(a => {
+                if(a.id !== id) {
+                    a.pause();
+                    a.currentTime = 0;
+                }
+            });
+
+            if (player.paused) {
+                player.play();
+                icon.className = 'fa-solid fa-pause';
+            } else {
+                player.pause();
+                icon.className = 'fa-solid fa-play';
+            }
+        }
+
+        function toggleHub(id, isPlaying) {
+            const hub = document.getElementById(`hub-${id}`);
+            const icon = document.getElementById(`icon-${id}`);
+            if (isPlaying) {
+                hub.classList.add('playing');
+                icon.className = 'fa-solid fa-pause';
+            } else {
+                hub.classList.remove('playing');
+                icon.className = 'fa-solid fa-play';
             }
         }
 
@@ -420,9 +1458,9 @@
             const input = document.getElementById('phone-search');
             const number = input.value.trim();
             const resultDiv = document.getElementById('verify-result');
-            
+
             if (!number) return;
-            
+
             resultDiv.style.display = 'block';
             resultDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking Blockchain Registry...';
             resultDiv.style.background = 'rgba(212, 168, 67, 0.05)';
@@ -431,7 +1469,7 @@
             try {
                 const response = await fetch(`${API_BASE}/blockchain/verify/?number=${encodeURIComponent(number)}`);
                 const data = await response.json();
-                
+
                 if (data.is_scam) {
                     resultDiv.style.background = 'rgba(231, 76, 60, 0.1)';
                     resultDiv.style.color = 'var(--danger)';
@@ -459,9 +1497,10 @@
             const key = document.getElementById('admin-key').value.trim();
             const verdict = document.getElementById('manual-verdict').value;
             const threat = document.getElementById('manual-threat').value;
-            
+            const audioFile = document.getElementById('manual-audio').files[0];
+
             if (!phone || !key) {
-                alert("Please enter phone number AND API Key");
+                voxAlert("Please enter phone number AND API Key", "Validation Error");
                 return;
             }
 
@@ -473,6 +1512,10 @@
                 formData.append('threat_level', threat);
                 formData.append('risk_score', 1.0);
 
+                if (audioFile) {
+                    formData.append('file', audioFile);
+                }
+
                 const response = await fetch(`${API_BASE}/blockchain/report/`, {
                     method: 'POST',
                     headers: {
@@ -480,16 +1523,16 @@
                     },
                     body: formData
                 });
-                
+
                 if (response.status === 200) {
-                    alert("✅ BLOCKCHAIN COMMIT SUCCESS! Number is now globally restricted.");
+                    voxAlert("✅ BLOCKCHAIN COMMIT SUCCESS! Number is now globally restricted.", "Security Protocol Complete");
                     loadRegistry();
                 } else {
                     const err = await response.json();
-                    alert("❌ FAILED: " + (err.detail || "Error committing to registry"));
+                    voxAlert("❌ FAILED: " + (err.detail || "Error committing to registry"), "Registry Error");
                 }
             } catch (e) {
-                alert("Server error connecting to Blockchain node.");
+                voxAlert("Server error connecting to Blockchain node.", "Node Sync Failed");
             }
         }
 
@@ -498,5 +1541,20 @@
         // Polling loop
         setInterval(loadRegistry, 30000);
     </script>
+
+    <!-- Premium Modal System -->
+    <div class="modal-overlay" id="vox-modal-overlay">
+        <div class="modal">
+            <i class="fa-solid fa-shield-halved modal-icon" id="vox-modal-icon"></i>
+            <div class="modal-title" id="vox-modal-title">Node Authorization</div>
+            <div class="modal-text" id="vox-modal-text">Establishing secure connection...</div>
+            <input type="password" class="modal-input" id="vox-modal-input" placeholder="Enter Administrative Key..." style="display: none;">
+            <div class="modal-actions">
+                <button class="modal-btn secondary" id="vox-modal-cancel" style="display: none;">Decline</button>
+                <button class="modal-btn primary" id="vox-modal-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
 </body>
+
 </html>

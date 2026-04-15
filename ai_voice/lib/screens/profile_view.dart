@@ -799,7 +799,7 @@ class _ProfileViewState extends State<ProfileView> {
           const SizedBox(height: 20),
           Expanded(
             child: ListView(
-              padding: EdgeInsets.only(bottom: 80 + bottomPadding),
+              padding: EdgeInsets.only(bottom: 20 + bottomPadding),
               children: [
                 _buildProfileHeader(),
                 const SizedBox(height: 24),

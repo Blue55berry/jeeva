@@ -91,17 +91,17 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
     final wasBlocked = _isBlocked;
 
     setState(() {
-      riskScore    = (data['risk'] as num?)?.toDouble() ?? 0.0;
-      emaRisk      = (data['emaRisk'] as num?)?.toDouble() ?? riskScore;
+      riskScore = (data['risk'] as num?)?.toDouble() ?? 0.0;
+      emaRisk = (data['emaRisk'] as num?)?.toDouble() ?? riskScore;
       callerNumber = data['number'] ?? 'Unknown';
-      isRealAnalysis    = data['isReal'] ?? false;
-      isRecording       = data['isRecording'] ?? false;
-      voiceSwitched     = data['voiceSwitched'] ?? false;
-      identityMatch     = data['identityMatch'] ?? false;
-      voiceSwitchCount  = data['voiceSwitchCount'] ?? 0;
-      pitchAnalysis     = data['pitchAnalysis'] ?? 'Stable';
+      isRealAnalysis = data['isReal'] ?? false;
+      isRecording = data['isRecording'] ?? false;
+      voiceSwitched = data['voiceSwitched'] ?? false;
+      identityMatch = data['identityMatch'] ?? false;
+      voiceSwitchCount = data['voiceSwitchCount'] ?? 0;
+      pitchAnalysis = data['pitchAnalysis'] ?? 'Stable';
       frequencyVariance = data['frequencyVariance'] ?? 'Normal';
-      _isBlocked        = data['type'] == 'blocked';
+      _isBlocked = data['type'] == 'blocked';
     });
 
     // ── Switch to Caller-ID badge for blocked numbers ──
@@ -124,7 +124,8 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
 
   Future<void> _expandOverlay() async {
     final physicalSize = PlatformDispatcher.instance.displays.first.size;
-    final pixelRatio = PlatformDispatcher.instance.displays.first.devicePixelRatio;
+    final pixelRatio =
+        PlatformDispatcher.instance.displays.first.devicePixelRatio;
     final screen = physicalSize / pixelRatio;
 
     final int panelW = (screen.width * 0.88).clamp(300, 360).toInt();
@@ -144,11 +145,16 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
 
   Future<void> _collapseOverlay() async {
     final physicalSize = PlatformDispatcher.instance.displays.first.size;
-    final pixelRatio = PlatformDispatcher.instance.displays.first.devicePixelRatio;
+    final pixelRatio =
+        PlatformDispatcher.instance.displays.first.devicePixelRatio;
     final screen = physicalSize / pixelRatio;
 
     // 1. Resize back to bubble
-    await FlutterOverlayWindow.resizeOverlay(_bubbleSizeInt, _bubbleSizeInt, true);
+    await FlutterOverlayWindow.resizeOverlay(
+      _bubbleSizeInt,
+      _bubbleSizeInt,
+      true,
+    );
     await Future.delayed(const Duration(milliseconds: 80));
 
     // 2. Move to right edge, vertically centered
@@ -161,7 +167,8 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
 
   Future<void> _showCallerIdBadge() async {
     final physicalSize = PlatformDispatcher.instance.displays.first.size;
-    final pixelRatio = PlatformDispatcher.instance.displays.first.devicePixelRatio;
+    final pixelRatio =
+        PlatformDispatcher.instance.displays.first.devicePixelRatio;
     final screen = physicalSize / pixelRatio;
 
     await FlutterOverlayWindow.resizeOverlay(320, 100, false);
@@ -197,8 +204,8 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
     return Material(
       color: Colors.transparent,
       child: switch (_mode) {
-        OverlayMode.compact       => _buildCompactBubble(themeColor, isDanger),
-        OverlayMode.expanded      => _buildExpandedPanel(themeColor, isDanger),
+        OverlayMode.compact => _buildCompactBubble(themeColor, isDanger),
+        OverlayMode.expanded => _buildExpandedPanel(themeColor, isDanger),
         OverlayMode.callerIdBadge => _buildCallerIdBadge(themeColor),
       },
     );
@@ -219,50 +226,68 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
             _expandOverlay();
           },
           child: ScaleTransition(
-          scale: Tween<double>(begin: 1.0, end: 1.08).animate(
-            CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [themeColor, themeColor.withValues(alpha: 0.75)],
+            scale: Tween<double>(begin: 1.0, end: 1.08).animate(
+              CurvedAnimation(
+                parent: _pulseController,
+                curve: Curves.easeInOut,
               ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 2.5),
-              boxShadow: [
-                BoxShadow(color: themeColor.withValues(alpha: 0.45), blurRadius: 18, spreadRadius: 2),
-                BoxShadow(color: Colors.black.withValues(alpha: 0.18), offset: const Offset(0, 4), blurRadius: 8),
-              ],
             ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    identityMatch
-                        ? Icons.person_off_rounded
-                        : (isDanger ? Icons.security_rounded : Icons.shield_rounded),
-                    color: Colors.white,
-                    size: 22,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [themeColor, themeColor.withValues(alpha: 0.75)],
+                ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: themeColor.withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    spreadRadius: 2,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    identityMatch ? 'MATCH' : '${(emaRisk * 100).toInt()}%',
-                    style: const TextStyle(
-                      color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900,
-                    ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    offset: const Offset(0, 4),
+                    blurRadius: 8,
                   ),
                 ],
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      identityMatch
+                          ? Icons.person_off_rounded
+                          : (isDanger
+                                ? Icons.security_rounded
+                                : Icons.shield_rounded),
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      identityMatch ? 'MATCH' : '${(emaRisk * 100).toInt()}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ──────────────────────────────────────────────
   // 2. EXPANDED PANEL — fills the overlay window (already positioned at center)
@@ -273,10 +298,21 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: themeColor.withValues(alpha: 0.25), width: 1.5),
+        border: Border.all(
+          color: themeColor.withValues(alpha: 0.25),
+          width: 1.5,
+        ),
         boxShadow: [
-          BoxShadow(color: themeColor.withValues(alpha: 0.18), blurRadius: 30, spreadRadius: 4),
-          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 20, offset: const Offset(0, 10)),
+          BoxShadow(
+            color: themeColor.withValues(alpha: 0.18),
+            blurRadius: 30,
+            spreadRadius: 4,
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
@@ -291,24 +327,48 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               child: Column(
                 children: [
-                  Text(callerNumber,
-                    style: const TextStyle(color: Color(0xFF1A1A1A), fontSize: 20, fontWeight: FontWeight.bold),
+                  Text(
+                    callerNumber,
+                    style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   if (identityMatch) ...[
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.red.withValues(alpha: 0.5), blurRadius: 10)],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withValues(alpha: 0.5),
+                            blurRadius: 10,
+                          ),
+                        ],
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.gavel_rounded, color: Colors.white, size: 14),
+                          Icon(
+                            Icons.gavel_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
                           SizedBox(width: 6),
-                          Text("KNOWN SCAMMER", style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text(
+                            "KNOWN SCAMMER",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -317,10 +377,18 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
                   Text(
                     identityMatch
                         ? "FINGERPRINT DATABASE MATCH"
-                        : (isRealAnalysis ? "REAL-TIME ENGINE LIVE" : "PREDICTIVE SCANNING"),
+                        : (isRealAnalysis
+                              ? "REAL-TIME ENGINE LIVE"
+                              : "PREDICTIVE SCANNING"),
                     style: TextStyle(
-                      color: identityMatch ? Colors.redAccent : (isRealAnalysis ? const Color(0xFF2ECC71) : const Color(0xFF999999)),
-                      fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1,
+                      color: identityMatch
+                          ? Colors.redAccent
+                          : (isRealAnalysis
+                                ? const Color(0xFF2ECC71)
+                                : const Color(0xFF999999)),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -330,16 +398,34 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _gauge("SEGMENT", (riskScore * 100).toInt(), themeColor),
-                      _gauge("EMA AVG", (emaRisk * 100).toInt(), themeColor, isLarge: true),
+                      _gauge(
+                        "EMA AVG",
+                        (emaRisk * 100).toInt(),
+                        themeColor,
+                        isLarge: true,
+                      ),
                       _gauge("ACCURACY", 98, const Color(0xFFD4A843)),
                     ],
                   ),
                   const SizedBox(height: 20),
 
                   // Detail rows
-                  _detailRow(Icons.record_voice_over_rounded, "Voice Switches", "$voiceSwitchCount Detected", highlight: voiceSwitched),
-                  _detailRow(Icons.waves_rounded, "Pitch Stability", pitchAnalysis),
-                  _detailRow(Icons.graphic_eq_rounded, "Freq Variance", frequencyVariance),
+                  _detailRow(
+                    Icons.record_voice_over_rounded,
+                    "Voice Switches",
+                    "$voiceSwitchCount Detected",
+                    highlight: voiceSwitched,
+                  ),
+                  _detailRow(
+                    Icons.waves_rounded,
+                    "Pitch Stability",
+                    pitchAnalysis,
+                  ),
+                  _detailRow(
+                    Icons.graphic_eq_rounded,
+                    "Freq Variance",
+                    frequencyVariance,
+                  ),
                   const SizedBox(height: 10),
                 ],
               ),
@@ -351,23 +437,31 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFF8F6F0),
-              border: Border(top: BorderSide(color: themeColor.withValues(alpha: 0.12))),
+              border: Border(
+                top: BorderSide(color: themeColor.withValues(alpha: 0.12)),
+              ),
             ),
             child: Row(
               children: [
-                Expanded(child: _actionBtn(
-                  onTap: () => _sendOverlayAction('toggle_record'),
-                  icon: isRecording ? Icons.stop_circle : Icons.fiber_manual_record,
-                  label: isRecording ? "STOP" : "RECORD",
-                  color: isRecording ? Colors.red : const Color(0xFFD4A843),
-                )),
+                Expanded(
+                  child: _actionBtn(
+                    onTap: () => _sendOverlayAction('toggle_record'),
+                    icon: isRecording
+                        ? Icons.stop_circle
+                        : Icons.fiber_manual_record,
+                    label: isRecording ? "STOP" : "RECORD",
+                    color: isRecording ? Colors.red : const Color(0xFFD4A843),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _actionBtn(
-                  onTap: () => _sendOverlayAction('report_scam'),
-                  icon: Icons.gavel_rounded,
-                  label: "REPORT",
-                  color: Colors.orange,
-                )),
+                Expanded(
+                  child: _actionBtn(
+                    onTap: () => _sendOverlayAction('report_scam'),
+                    icon: Icons.gavel_rounded,
+                    label: "REPORT",
+                    color: Colors.orange,
+                  ),
+                ),
               ],
             ),
           ),
@@ -380,25 +474,44 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [themeColor.withValues(alpha: 0.14), const Color(0xFFF8F6F2)]),
+        gradient: LinearGradient(
+          colors: [themeColor.withValues(alpha: 0.14), const Color(0xFFF8F6F2)],
+        ),
       ),
       child: Row(
         children: [
-          Icon(isDanger ? Icons.warning_rounded : Icons.shield_sharp, color: themeColor, size: 20),
+          Icon(
+            isDanger ? Icons.warning_rounded : Icons.shield_sharp,
+            color: themeColor,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               isDanger ? "THREAT DETECTED" : "VOXSHIELD SECURE",
-              style: TextStyle(color: themeColor, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+              style: TextStyle(
+                color: themeColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
             ),
           ),
           // ── Collapse button (shield icon) ──
           GestureDetector(
             onTap: _collapseOverlay,
             child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: themeColor.withValues(alpha: 0.12), shape: BoxShape.circle),
-              child: Icon(Icons.close_fullscreen_rounded, color: themeColor, size: 18),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: themeColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.close_fullscreen_rounded,
+                color: themeColor,
+                size: 18,
+              ),
             ),
           ),
         ],
@@ -420,10 +533,21 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
         decoration: BoxDecoration(
           color: const Color(0xFF1A1A1A),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.red.withValues(alpha: 0.6), width: 1.5),
+          border: Border.all(
+            color: Colors.red.withValues(alpha: 0.6),
+            width: 1.5,
+          ),
           boxShadow: [
-            BoxShadow(color: Colors.red.withValues(alpha: 0.25), blurRadius: 20, spreadRadius: 2),
-            BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 6)),
+            BoxShadow(
+              color: Colors.red.withValues(alpha: 0.25),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
           ],
         ),
         child: Row(
@@ -440,7 +564,9 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
               ),
               child: Center(
                 child: Icon(
-                  identityMatch ? Icons.person_off_rounded : Icons.block_rounded,
+                  identityMatch
+                      ? Icons.person_off_rounded
+                      : Icons.block_rounded,
                   color: Colors.red,
                   size: 28,
                 ),
@@ -449,25 +575,40 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
             // Content
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text(
                       "⚠️ BLOCKED SCAMMER",
-                      style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1),
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       callerNumber,
-                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       "Risk: ${(emaRisk * 100).toInt()}% • Tap to dismiss",
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 10,
+                      ),
                     ),
                   ],
                 ),
@@ -487,41 +628,91 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
     final size = isLarge ? 76.0 : 56.0;
     return Column(
       children: [
-        Stack(alignment: Alignment.center, children: [
-          SizedBox(width: size, height: size, child: CircularProgressIndicator(
-            value: value / 100, strokeWidth: isLarge ? 5 : 3,
-            backgroundColor: color.withValues(alpha: 0.1),
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-          )),
-          Text("$value%", style: TextStyle(color: const Color(0xFF1A1A1A), fontSize: isLarge ? 17 : 13, fontWeight: FontWeight.w900)),
-        ]),
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: size,
+              height: size,
+              child: CircularProgressIndicator(
+                value: value / 100,
+                strokeWidth: isLarge ? 5 : 3,
+                backgroundColor: color.withValues(alpha: 0.1),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+            Text(
+              "$value%",
+              style: TextStyle(
+                color: const Color(0xFF1A1A1A),
+                fontSize: isLarge ? 17 : 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
-        Text(label, style: const TextStyle(color: Color(0xFF999999), fontSize: 8, fontWeight: FontWeight.bold)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF999999),
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _detailRow(IconData icon, String label, String value, {bool highlight = false}) {
+  Widget _detailRow(
+    IconData icon,
+    String label,
+    String value, {
+    bool highlight = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: highlight ? Colors.red.withValues(alpha: 0.1) : const Color(0xFFF5EFE4),
-            borderRadius: BorderRadius.circular(10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: highlight
+                  ? Colors.red.withValues(alpha: 0.1)
+                  : const Color(0xFFF5EFE4),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: highlight ? Colors.red : const Color(0xFF8A8A8A),
+              size: 16,
+            ),
           ),
-          child: Icon(icon, color: highlight ? Colors.red : const Color(0xFF8A8A8A), size: 16),
-        ),
-        const SizedBox(width: 10),
-        Text(label, style: const TextStyle(color: Color(0xFF4A4A4A), fontSize: 13)),
-        const Spacer(),
-        Text(value, style: TextStyle(color: highlight ? Colors.red : const Color(0xFF1A1A1A), fontSize: 13, fontWeight: FontWeight.bold)),
-      ]),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: const TextStyle(color: Color(0xFF4A4A4A), fontSize: 13),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              color: highlight ? Colors.red : const Color(0xFF1A1A1A),
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _actionBtn({required VoidCallback onTap, required IconData icon, required String label, required Color color}) {
+  Widget _actionBtn({
+    required VoidCallback onTap,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -531,11 +722,22 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget>
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: color.withValues(alpha: 0.35)),
         ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, color: color, size: 17),
-          const SizedBox(width: 7),
-          Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
-        ]),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 17),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -615,12 +817,6 @@ class _VoxSplashViewState extends State<VoxSplashView> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Image.asset(
-                      "logo.png",
-                      height: 80,
-                      width: 80,
-                    ),
-                    const SizedBox(height: 24),
                     const Text(
                       "VoxShield AI",
                       style: TextStyle(
@@ -834,9 +1030,7 @@ class PremiumDashboardState extends State<PremiumDashboard>
                   child: AnimatedPadding(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.only(
-                      bottom: _isNavRevealed ? 96 : 134,
-                    ),
+                    padding: EdgeInsets.only(bottom: _isNavRevealed ? 96 : 134),
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 400),
                       child: _buildCurrentView(),
@@ -914,12 +1108,6 @@ class PremiumDashboardState extends State<PremiumDashboard>
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset(
-                "logo.png",
-                height: 24,
-                width: 24,
-              ),
-              const SizedBox(width: 8),
               const Text(
                 "VoxShield AI",
                 style: TextStyle(

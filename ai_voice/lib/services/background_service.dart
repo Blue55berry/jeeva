@@ -8,18 +8,21 @@ import 'call_service.dart';
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
 
-  // Configure notifications for the foreground service
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'voxshield_background',
     'VoxShield Background Guard',
-    description: 'This channel is used for continuous background AI protection.',
+    description:
+        'This channel is used for continuous background AI protection.',
     importance: Importance.max, // Set to max to keep service high priority
   );
 
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.createNotificationChannel(channel);
 
   await service.configure(
@@ -29,7 +32,8 @@ Future<void> initializeBackgroundService() async {
       isForegroundMode: true,
       notificationChannelId: 'voxshield_background',
       initialNotificationTitle: 'VoxShield AI Active',
-      initialNotificationContent: 'Continuous call monitoring is protecting you.',
+      initialNotificationContent:
+          'Continuous call monitoring is protecting you.',
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(
@@ -55,11 +59,13 @@ void onStart(ServiceInstance service) async {
 
   // Instantiate CallService natively in this Isolate
   final callService = CallService();
-  
+
   // Start the actual phone state listener from the background
   try {
     callService.startListening();
-    debugPrint("[BackgroundService] Call Service listener registered successfully in the background isolate.");
+    debugPrint(
+      "[BackgroundService] Call Service listener registered successfully in the background isolate.",
+    );
   } catch (e) {
     debugPrint("[BackgroundService] Error starting Call Service: $e");
   }
@@ -67,16 +73,16 @@ void onStart(ServiceInstance service) async {
   // Handle service events (like stop requested from UI)
   if (service is AndroidServiceInstance) {
     service.setAsForegroundService(); // Force foreground immediately
-    
+
     // Periodic "I am alive" pulse for aggressive OS skins (Xiaomi/Oppo)
     // Low frequency (30 min) keeps it professional without battery drain
     Timer.periodic(const Duration(minutes: 30), (timer) async {
-       if (await service.isForegroundService()) {
-         service.setForegroundNotificationInfo(
-           title: "VoxShield AI Active",
-           content: "Your AI Guardian is protecting calls.",
-         );
-       }
+      if (await service.isForegroundService()) {
+        service.setForegroundNotificationInfo(
+          title: "VoxShield AI Active",
+          content: "Your AI Guardian is protecting calls.",
+        );
+      }
     });
 
     service.on('setAsForeground').listen((event) {
@@ -86,7 +92,7 @@ void onStart(ServiceInstance service) async {
       service.setAsBackgroundService();
     });
   }
-  
+
   service.on('stopService').listen((event) {
     service.stopSelf();
   });

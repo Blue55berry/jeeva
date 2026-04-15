@@ -277,6 +277,32 @@ class DatabaseService {
   // ---- BLOCKCHAIN & SECURITY ----
 
   Future<Map<String, dynamic>?> checkNumberSecurity(String number) async {
+    // 1. Fetch from live blockchain first for immediate global sync
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? backendUrl = prefs.getString('backend_url');
+      if (backendUrl != null && backendUrl.isNotEmpty) {
+        backendUrl = backendUrl.replaceAll(RegExp(r'/+$'), '');
+        final response = await http.get(
+          Uri.parse('$backendUrl/blockchain/verify/?number=${Uri.encodeComponent(number)}'),
+        ).timeout(const Duration(seconds: 3));
+        
+        if (response.statusCode == 200) {
+           final data = json.decode(response.body);
+           if (data['is_scam'] == true) {
+              return {
+                 'is_blocked': 1,
+                 'threat_level': data['threat_level'] ?? 'CRITICAL',
+                 'report_count': data['report_count'] ?? 1,
+                 'avg_risk_score': 1.0,
+              };
+           }
+        }
+      }
+    } catch (_) {
+      // Offline or network error: fallback to local DB below
+    }
+
     final db = await database;
     if (db == null) return null;
     
